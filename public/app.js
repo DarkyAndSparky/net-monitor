@@ -1,137 +1,10 @@
-/* ══════════════════════════════════════════════════════════
-   ui-utils.js — вставить В САМОЕ НАЧАЛО app.js
-   (перед всеми остальными функциями)
-══════════════════════════════════════════════════════════ */
-
-/* ── TOAST-уведомления ─────────────────────────────────── */
-// Использование:
-//   toast('Устройство добавлено', 'success')
-//   toast('Ошибка подключения', 'error')
-//   toast('Импорт запущен...', 'info')
-//   toast('Проверьте настройки', 'warning')
-
-function toast(msg, type = 'info', duration = 4000) {
-  const icons = { success: 'ti-circle-check', error: 'ti-circle-x', info: 'ti-info-circle', warning: 'ti-alert-triangle' };
-  const container = document.getElementById('toast-container');
-  const el = document.createElement('div');
-  el.className = `toast ${type}`;
-  el.innerHTML = `
-    <i class="ti ${icons[type] || icons.info}" aria-hidden="true"></i>
-    <span class="toast-msg">${msg}</span>
-    <button class="toast-close" aria-label="Закрыть">×</button>`;
-  container.appendChild(el);
-  const close = () => {
-    el.classList.add('hide');
-    el.addEventListener('animationend', () => el.remove(), { once: true });
-  };
-  el.querySelector('.toast-close').onclick = close;
-  if (duration > 0) setTimeout(close, duration);
-  return close; // можно закрыть вручную
-}
-
-/* ── CONFIRM-диалог (замена window.confirm) ────────────── */
-// Использование:
-//   const ok = await showConfirm('Удалить устройство?', 'Это действие необратимо.');
-//   if (ok) { ... }
-// Для кнопки с другим цветом/текстом:
-//   await showConfirm('Восстановить из бэкапа?', 'Текущие данные будут заменены.', { okLabel: 'Восстановить', okClass: 'btn-primary' })
-
-function showConfirm(title, text, opts = {}) {
-  return new Promise(resolve => {
-    const overlay = document.getElementById('confirm-dialog-overlay');
-    document.getElementById('confirm-dialog-title').textContent = title;
-    document.getElementById('confirm-dialog-text').textContent = text;
-    const okBtn = document.getElementById('confirm-dialog-ok');
-    okBtn.textContent = opts.okLabel || 'Удалить';
-    okBtn.className = opts.okClass || '';  // по умолчанию красная кнопка из CSS
-    overlay.classList.remove('hidden');
-    const done = val => { overlay.classList.add('hidden'); resolve(val); };
-    okBtn.onclick = () => done(true);
-    document.getElementById('confirm-dialog-cancel').onclick = () => done(false);
-    // закрыть кликом по оверлею
-    overlay.onclick = e => { if (e.target === overlay) done(false); };
-  });
-}
-
-/* ── SKELETON строки таблицы ───────────────────────────── */
-// Вызвать ДО загрузки данных, удалится автоматически при рендере
-// Использование: showTableSkeleton('devices-tbody', 5, 8)
-//   tbody — id элемента, rows — количество строк, cols — количество колонок
-
-function showTableSkeleton(tbodyId, rows = 5, cols = 6) {
-  const tbody = document.getElementById(tbodyId);
-  if (!tbody) return;
-  tbody.innerHTML = Array.from({ length: rows }, () =>
-    `<tr class="skeleton-row">${Array.from({ length: cols }, () =>
-      `<td><span class="skeleton" style="width:${60 + Math.random() * 35 | 0}%"></span></td>`
-    ).join('')}</tr>`
-  ).join('');
-}
-
-/* ── COPYABLE — клик копирует с подтверждением ─────────── */
-// Добавить класс .copyable и data-copy="значение" к элементу
-// Использование в HTML:
-//   <span class="copyable" data-copy="192.168.1.1">
-//     192.168.1.1 <i class="ti ti-copy copy-icon"></i>
-//   </span>
-
-document.addEventListener('click', e => {
-  const el = e.target.closest('.copyable');
-  if (!el) return;
-  const val = el.dataset.copy || el.textContent.trim();
-  navigator.clipboard.writeText(val).then(() => {
-    el.classList.add('copied');
-    const icon = el.querySelector('.copy-icon');
-    if (icon) { icon.classList.remove('ti-copy'); icon.classList.add('ti-check'); }
-    setTimeout(() => {
-      el.classList.remove('copied');
-      if (icon) { icon.classList.remove('ti-check'); icon.classList.add('ti-copy'); }
-    }, 1800);
-  }).catch(() => toast('Не удалось скопировать', 'error'));
-});
-
-/* ── КНОПКИ: состояние loading ─────────────────────────── */
-// Использование:
-//   const restore = btnLoading(document.getElementById('import-btn'));
-//   // ... операция ...
-//   restore();
-
-function btnLoading(btn) {
-  if (!btn) return () => {};
-  const orig = btn.innerHTML;
-  btn.classList.add('loading');
-  btn.disabled = true;
-  return () => { btn.classList.remove('loading'); btn.disabled = false; btn.innerHTML = orig; };
-}
-
-/* ── ПЛАВАЮЩИЙ ЗУМ — проброс событий ──────────────────── */
-// Кнопки zoom-in-btn2 / zoom-fit-btn2 / zoom-out-btn2 в .map-zoom-controls
-// дублируют клик на оригинальные кнопки в тулбаре (которые можно скрыть)
-document.addEventListener('DOMContentLoaded', () => {
-  const pairs = [
-    ['zoom-in-btn2',  'zoom-in-btn'],
-    ['zoom-fit-btn2', 'zoom-fit-btn'],
-    ['zoom-out-btn2', 'zoom-out-btn'],
-  ];
-  pairs.forEach(([floatId, origId]) => {
-    const floatBtn = document.getElementById(floatId);
-    const origBtn  = document.getElementById(origId);
-    if (floatBtn && origBtn) floatBtn.onclick = () => origBtn.click();
-  });
-});
-
-/* ══════════════════════════════════════════════════════════
-   КОНЕЦ ui-utils.js
-══════════════════════════════════════════════════════════ */
-
-
 let DEVICES = [];
 let CATEGORIES = [];
 let TOPOLOGY = { edges: [] }; // реальные связи устройств, построенные автообнаружением
 let FEATURES = { snmp: false, portChecks: false, incidents: false, auditLog: false }; // дополнительные модули
 let STATUS = {};   // id -> { online: true|false|null, monitored: bool, lastChecked: number|null }
 let UPTIME = {};   // id -> { uptime24h, uptime7d, samples: [{t,online}] }
-let CURRENT_ROLE = 'admin'; // 'admin' | 'viewer' — управляет видимостью элементов через CSS-класс admin-only
+let CURRENT_ROLE = 'admin'; // 'admin' | 'operator' | 'viewer' — управляет видимостью через admin-only/strict-admin-only
 let editingId = null;
 
 const catById = id => CATEGORIES.find(c => c.id === id) || { name: id, color: '#6b7280' };
@@ -154,11 +27,13 @@ function showLogin() {
 }
 
 function showApp(username, role) {
-  CURRENT_ROLE = role === 'viewer' ? 'viewer' : 'admin';
+  CURRENT_ROLE = ['admin', 'operator', 'viewer'].includes(role) ? role : 'admin';
   document.body.classList.toggle('role-viewer', CURRENT_ROLE === 'viewer');
+  document.body.classList.toggle('role-operator', CURRENT_ROLE === 'operator');
   document.getElementById('login-overlay').classList.add('hidden');
   document.getElementById('app-root').classList.remove('hidden');
-  document.getElementById('current-user').innerHTML = `👤 ${esc(username)} <span class="role-badge">${CURRENT_ROLE === 'admin' ? 'администратор' : 'только просмотр'}</span>`;
+  const roleLabel = CURRENT_ROLE === 'admin' ? 'администратор' : CURRENT_ROLE === 'operator' ? 'operator' : 'только просмотр';
+  document.getElementById('current-user').innerHTML = `👤 ${esc(username)} <span class="role-badge">${roleLabel}</span>`;
   loadAll();
 }
 
@@ -356,7 +231,7 @@ function renderDevices() {
 
   document.getElementById('devices-empty-state').classList.toggle('hidden', DEVICES.length > 0);
   if (!DEVICES.length) {
-    document.getElementById('devices-empty-state').innerHTML = CURRENT_ROLE === 'admin'
+    document.getElementById('devices-empty-state').innerHTML = CURRENT_ROLE !== 'viewer'
       ? 'Пока нет ни одного устройства. <button class="btn-primary" onclick="openAdd()" style="margin-left:8px;">+ Добавить первое устройство</button> или импортируйте их из «Настроек» (CSV / MikroTik).'
       : 'Пока нет ни одного устройства.';
   }
@@ -454,7 +329,7 @@ function renderDevices() {
 function updateBulkActionsBar() {
   const bar = document.getElementById('bulk-actions-bar');
   const count = SELECTED_DEVICE_IDS.size;
-  bar.classList.toggle('visible', count > 0);
+  bar.classList.toggle('hidden', count === 0);
   document.getElementById('bulk-selected-count').textContent = `Выбрано: ${count}`;
   const selectAll = document.getElementById('select-all-devices');
   const visibleChecked = document.querySelectorAll('.row-select').length;
@@ -477,7 +352,7 @@ document.getElementById('bulk-clear-selection').addEventListener('click', () => 
 document.getElementById('bulk-delete-btn').addEventListener('click', async () => {
   const ids = [...SELECTED_DEVICE_IDS];
   if (!ids.length) return;
-  if (!await showConfirm(`Удалить устройства (${ids.length} шт.)`, 'Это действие необратимо.')) return;
+  if (!confirm(`Удалить выбранные устройства (${ids.length} шт.)? Действие необратимо.`)) return;
   await api('/api/devices/bulk-delete', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids })
   });
@@ -910,7 +785,7 @@ function attachMapInteractions(svg) {
         e.stopPropagation();
         const edgeId = hit.closest('.map-edge').dataset.edgeId;
         if (!edgeId) return; // связь из условной «звезды» — нечего удалять, она не хранится
-        if (!await showConfirm('Удалить связь?', 'Связь между устройствами будет удалена.')) return;
+        if (!confirm('Удалить эту связь?')) return;
         await api(`/api/topology/edges/${edgeId}`, { method: 'DELETE' });
         TOPOLOGY = await api('/api/topology').then(r => r.json());
         renderMap();
@@ -923,7 +798,7 @@ function attachMapInteractions(svg) {
   let dragMoved = false;
   svg.querySelectorAll('.map-node').forEach(node => {
     node.addEventListener('mousedown', (e) => {
-      if (CURRENT_ROLE !== 'admin') return;
+      if (CURRENT_ROLE === 'viewer') return;
       if (LINK_EDIT_MODE) return; // в режиме связей узлы не двигаем, только кликаем
       if (TREE_VIEW) return; // в режиме дерева позиции вычисляются автоматически
       dragging = node; dragMoved = false;
@@ -1177,7 +1052,7 @@ function toggleIntervalVisibility() {
 document.getElementById('f-monitored').addEventListener('change', toggleIntervalVisibility);
 
 async function deleteDevice(id) {
-  if (!await showConfirm('Удалить устройство?', 'Это действие необратимо.')) return;
+  if (!confirm('Удалить устройство?')) return;
   await api(`/api/devices/${id}`, { method: 'DELETE' });
   await loadAll();
 }
@@ -1380,7 +1255,7 @@ document.getElementById('mon-add-all').addEventListener('click', async () => {
 });
 
 document.getElementById('mon-remove-all').addEventListener('click', async () => {
-  if (!await showConfirm('Выключить мониторинг?', 'Мониторинг будет выключен для всех устройств.')) return;
+  if (!confirm('Выключить мониторинг для всех устройств?')) return;
   await api('/api/monitoring/bulk', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ids: DEVICES.map(d => d.id), monitored: false })
@@ -1593,20 +1468,36 @@ document.getElementById('features-form').addEventListener('submit', async (e) =>
 });
 
 // ---------------- АУДИТ-ЛОГ ----------------
-async function loadAuditLog() {
+let AUDIT_LOG_PAGE = 1;
+async function loadAuditLog(page) {
+  if (page) AUDIT_LOG_PAGE = page;
   try {
-    const entries = await api('/api/audit-log').then(r => r.json());
+    const data = await api(`/api/audit-log?page=${AUDIT_LOG_PAGE}&pageSize=50`).then(r => r.json());
     const hint = document.getElementById('audit-log-hint');
-    hint.textContent = entries.length ? '' : 'Пока нет записей.';
-    document.getElementById('audit-log-tbody').innerHTML = entries.map(e => `
+    const table = document.getElementById('audit-log-table');
+    const actions = document.getElementById('audit-log-actions');
+    const pagination = document.getElementById('audit-log-pagination');
+    if (!data.total) {
+      hint.textContent = 'Пока нет записей.';
+      table.classList.add('hidden'); actions.classList.add('hidden'); pagination.classList.add('hidden');
+      return;
+    }
+    hint.textContent = '';
+    table.classList.remove('hidden'); actions.classList.remove('hidden'); pagination.classList.remove('hidden');
+    document.getElementById('audit-log-tbody').innerHTML = data.entries.map(e => `
       <tr>
         <td class="last-checked">${new Date(e.t).toLocaleString('ru-RU')}</td>
         <td>${esc(e.user)}</td>
         <td>${esc(e.action)}</td>
         <td>${esc(e.details)}</td>
       </tr>`).join('');
+    document.getElementById('audit-log-pagination-info').textContent = `Страница ${data.page} из ${data.totalPages} · всего: ${data.total}`;
+    document.getElementById('audit-log-prev-btn').disabled = data.page <= 1;
+    document.getElementById('audit-log-next-btn').disabled = data.page >= data.totalPages;
   } catch (e) { /* нет прав или сеть — просто не показываем */ }
 }
+document.getElementById('audit-log-prev-btn').addEventListener('click', () => loadAuditLog(AUDIT_LOG_PAGE - 1));
+document.getElementById('audit-log-next-btn').addEventListener('click', () => loadAuditLog(AUDIT_LOG_PAGE + 1));
 
 // ---------------- ИНЦИДЕНТЫ ----------------
 async function loadIncidents() {
@@ -1664,9 +1555,11 @@ document.getElementById('csv-import-btn').addEventListener('click', async () => 
 async function loadSettings() {
   loadAboutPanel(); // доступно всем ролям
   loadOuiStatus(); // доступно всем ролям (кнопка обновления — только админу)
-  if (CURRENT_ROLE !== 'admin') return; // у viewer в «Настройках» доступна только смена своего пароля и «О системе»
+  if (CURRENT_ROLE === 'viewer') return; // у viewer в «Настройках» доступна только смена пароля, «О системе» и статус OUI
   renderCategoriesTable();
-  await Promise.all([loadConnections(), loadAlertSettings(), loadUsers(), loadFeaturesForm(), loadBrandingForm()]);
+  await Promise.all([loadConnections(), loadAlertSettings()]);
+  if (CURRENT_ROLE !== 'admin') return; // Operator не видит пользователей/функции/брендинг/бэкап/аудит-лог
+  await Promise.all([loadUsers(), loadFeaturesForm(), loadBrandingForm()]);
 }
 
 // ---------------- OUI: БАЗА ПРОИЗВОДИТЕЛЕЙ ----------------
@@ -1811,7 +1704,7 @@ async function importConnection(type, id, btn) {
 }
 
 async function deleteConnection(type, id) {
-  if (!await showConfirm('Удалить подключение?', 'Удалить это подключение из списка?')) return;
+  if (!confirm('Удалить это подключение из списка?')) return;
   await api(`${CONN_TYPE_ENDPOINTS[type]}/${id}`, { method: 'DELETE' });
   await loadConnections();
 }
@@ -2004,6 +1897,7 @@ async function loadUsers() {
         <td>
           <select class="role-select" data-username="${esc(u.username)}" ${u.username === meRes.username ? 'disabled' : ''}>
             <option value="viewer" ${u.role === 'viewer' ? 'selected' : ''}>Только просмотр</option>
+            <option value="operator" ${u.role === 'operator' ? 'selected' : ''}>Operator</option>
             <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Администратор</option>
           </select>
         </td>
@@ -2040,7 +1934,7 @@ document.getElementById('user-form').addEventListener('submit', async (e) => {
 });
 
 async function deleteUser(username) {
-  if (!await showConfirm(`Удалить пользователя «${username}»?`, 'Это действие необратимо.')) return;
+  if (!confirm(`Удалить пользователя «${username}»?`)) return;
   const res = await api(`/api/users/${username}`, { method: 'DELETE' });
   if (!res.ok) { const d = await res.json(); alert('Ошибка: ' + (d.message || d.error)); }
   await loadUsers();
@@ -2072,7 +1966,7 @@ document.getElementById('backup-restore-btn').addEventListener('click', async ()
   const resultBox = document.getElementById('backup-restore-result');
   const file = fileInput.files[0];
   if (!file) { resultBox.textContent = 'Выберите файл бэкапа.'; return; }
-  if (!await showConfirm('Восстановить из бэкапа?', 'Текущие данные будут полностью заменены. Действие необратимо.', { okLabel: 'Восстановить', okClass: 'btn-primary' })) return;
+  if (!confirm('Восстановление ПОЛНОСТЬЮ заменит текущие данные содержимым файла. Действие необратимо. Продолжить?')) return;
 
   resultBox.textContent = 'Читаю файл...';
   try {

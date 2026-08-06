@@ -188,6 +188,18 @@ function requireAdmin(req, res, next) {
   });
 }
 
+// Роль «Operator»: повседневная работа (устройства, карта, мониторинг, обнаружение сети,
+// алерты, категории) — без доступа к чувствительным вещам уровня администратора
+// (пользователи, брендинг, резервные копии, фиче-флаги, учётные данные интеграций, аудит-лог).
+function requireOperator(req, res, next) {
+  requireAuth(req, res, () => {
+    if (req.session.role !== 'admin' && req.session.role !== 'operator') {
+      return res.status(403).json({ error: 'forbidden', message: 'Недостаточно прав (нужна роль «Operator» или «Администратор»)' });
+    }
+    next();
+  });
+}
+
 // ---------- Фиче-флаги дополнительных модулей ----------
 function getFeatures() {
   const s = readJSON(SETTINGS_FILE, {});
@@ -283,6 +295,9 @@ app.get('/api/users', requireAdmin, (req, res) => {
   res.json(store.users.map(u => ({ username: u.username, role: u.role || 'admin' })));
 });
 
+const VALID_ROLES = ['admin', 'operator', 'viewer'];
+function normalizeRole(role) { return VALID_ROLES.includes(role) ? role : 'viewer'; }
+
 app.post('/api/users', requireAdmin, (req, res) => {
   const { username, password, role } = req.body || {};
   if (!username || !/^[a-zA-Z0-9_.-]{3,32}$/.test(username)) {
@@ -295,10 +310,11 @@ app.post('/api/users', requireAdmin, (req, res) => {
   if (store.users.find(u => u.username === username)) {
     return res.status(409).json({ error: 'already_exists', message: 'Пользователь с таким логином уже есть' });
   }
+  const finalRole = normalizeRole(role);
   const { salt, hash } = hashPassword(password);
-  store.users.push({ username, salt, hash, role: role === 'viewer' ? 'viewer' : 'admin' });
+  store.users.push({ username, salt, hash, role: finalRole });
   writeJSON(USERS_FILE, store);
-  logAudit(req, 'user.create', `${username} (${role === 'viewer' ? 'viewer' : 'admin'})`);
+  logAudit(req, 'user.create', `${username} (${finalRole})`);
   res.json({ ok: true });
 });
 
@@ -306,8 +322,8 @@ app.put('/api/users/:username/role', requireAdmin, (req, res) => {
   const store = readJSON(USERS_FILE, { users: [] });
   const user = store.users.find(u => u.username === req.params.username);
   if (!user) return res.status(404).json({ error: 'not_found' });
-  const newRole = req.body.role === 'viewer' ? 'viewer' : 'admin';
-  if (user.role !== 'viewer' && newRole === 'viewer') {
+  const newRole = normalizeRole(req.body.role);
+  if ((user.role || 'admin') === 'admin' && newRole !== 'admin') {
     const admins = store.users.filter(u => (u.role || 'admin') === 'admin');
     if (admins.length <= 1) return res.status(400).json({ error: 'last_admin', message: 'Нельзя понизить последнего администратора' });
   }
@@ -556,7 +572,7 @@ app.get('/api/oui/status', requireAuth, (req, res) => {
   });
 });
 
-app.post('/api/oui/refresh', requireAdmin, async (req, res) => {
+app.post('/api/oui/refresh', requireOperator, async (req, res) => {
   const result = await refreshOuiDatabase();
   logAudit(req, 'oui.refresh', result.ok ? `${result.count} записей` : `ошибка: ${result.message}`);
   if (!result.ok) return res.status(502).json(result);
@@ -566,7 +582,7 @@ app.post('/api/oui/refresh', requireAdmin, async (req, res) => {
 // ---------- Категории ----------
 app.get('/api/categories', requireAuth, (req, res) => res.json(readDB().categories));
 
-app.post('/api/categories', requireAdmin, (req, res) => {
+app.post('/api/categories', requireOperator, (req, res) => {
   const { categories } = req.body || {};
   if (!Array.isArray(categories) || !categories.length) {
     return res.status(400).json({ error: 'categories_required', message: 'Нужна хотя бы одна категория' });
@@ -639,7 +655,7 @@ app.get('/api/devices', requireAuth, (req, res) => {
   res.json(devices);
 });
 
-app.post('/api/devices', requireAdmin, (req, res) => {
+app.post('/api/devices', requireOperator, (req, res) => {
   const db = readDB();
   const device = {
     id: newId('d'),
@@ -675,7 +691,7 @@ const DEVICE_EDITABLE_FIELDS = [
   'key', 'monitored', 'alertsEnabled', 'checkInterval', 'snmp', 'portChecks', 'x', 'y'
 ];
 
-app.put('/api/devices/:id', requireAdmin, (req, res) => {
+app.put('/api/devices/:id', requireOperator, (req, res) => {
   const db = readDB();
   const idx = db.devices.findIndex(d => d.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'not found' });
@@ -696,7 +712,7 @@ app.put('/api/devices/:id', requireAdmin, (req, res) => {
   res.json(db.devices[idx]);
 });
 
-app.delete('/api/devices/:id', requireAdmin, (req, res) => {
+app.delete('/api/devices/:id', requireOperator, (req, res) => {
   const db = readDB();
   const target = db.devices.find(d => d.id === req.params.id);
   db.devices = db.devices.filter(d => d.id !== req.params.id);
@@ -709,7 +725,7 @@ app.delete('/api/devices/:id', requireAdmin, (req, res) => {
 });
 
 // ---------- Массовые операции над устройствами ----------
-app.post('/api/devices/bulk-delete', requireAdmin, (req, res) => {
+app.post('/api/devices/bulk-delete', requireOperator, (req, res) => {
   const { ids } = req.body || {};
   if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids_required' });
   const db = readDB();
@@ -725,7 +741,7 @@ app.post('/api/devices/bulk-delete', requireAdmin, (req, res) => {
 
 // Разрешённые для массового изменения поля — чтобы случайно не затереть x/y, id и т.п.
 const BULK_UPDATE_ALLOWED_FIELDS = ['category', 'monitored', 'alertsEnabled', 'key', 'checkInterval', 'location'];
-app.post('/api/devices/bulk-update', requireAdmin, (req, res) => {
+app.post('/api/devices/bulk-update', requireOperator, (req, res) => {
   const { ids, patch } = req.body || {};
   if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids_required' });
   if (!patch || typeof patch !== 'object') return res.status(400).json({ error: 'patch_required' });
@@ -1022,7 +1038,7 @@ app.post('/api/status/:id/check', requireAuth, async (req, res) => {
 });
 
 // Массовое включение/выключение мониторинга (для вкладки «Мониторинг»)
-app.post('/api/monitoring/bulk', requireAdmin, (req, res) => {
+app.post('/api/monitoring/bulk', requireOperator, (req, res) => {
   const { ids, monitored } = req.body || {};
   if (!Array.isArray(ids)) return res.status(400).json({ error: 'ids_required' });
   const db = readDB();
@@ -1070,7 +1086,7 @@ app.get('/api/alert-settings', requireAuth, (req, res) => {
   res.json(safe);
 });
 
-app.post('/api/alert-settings', requireAdmin, (req, res) => {
+app.post('/api/alert-settings', requireOperator, (req, res) => {
   const s = readJSON(SETTINGS_FILE, {});
   const incoming = req.body || {};
   const prev = s.alerting || {};
@@ -1100,7 +1116,7 @@ app.post('/api/alert-settings', requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/alert-settings/test', requireAdmin, async (req, res) => {
+app.post('/api/alert-settings/test', requireOperator, async (req, res) => {
   const s = readJSON(SETTINGS_FILE, {});
   const cfg = s.alerting || {};
   await dispatchAlert(cfg, { id: 'test', name: 'Тестовое устройство', ip: '10.0.0.1', location: 'Тест' }, 'test',
@@ -1220,7 +1236,7 @@ async function importFromRouter(routerCfg) {
   return { created, updated, total: leases.length };
 }
 
-app.post('/api/mikrotik/routers/:id/import', requireAdmin, async (req, res) => {
+app.post('/api/mikrotik/routers/:id/import', requireOperator, async (req, res) => {
   const s = readJSON(SETTINGS_FILE, {});
   const routerCfg = (s.mikrotiks || []).find(r => r.id === req.params.id);
   if (!routerCfg) return res.status(404).json({ error: 'not found' });
@@ -1233,7 +1249,7 @@ app.post('/api/mikrotik/routers/:id/import', requireAdmin, async (req, res) => {
 });
 
 // Импорт сразу со всех сохранённых роутеров
-app.post('/api/mikrotik/import-all', requireAdmin, async (req, res) => {
+app.post('/api/mikrotik/import-all', requireOperator, async (req, res) => {
   const s = readJSON(SETTINGS_FILE, {});
   const routers = s.mikrotiks || [];
   const results = [];
@@ -1407,7 +1423,7 @@ app.delete('/api/unifi/controllers/:id', requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/unifi/controllers/:id/import', requireAdmin, async (req, res) => {
+app.post('/api/unifi/controllers/:id/import', requireOperator, async (req, res) => {
   const s = readJSON(SETTINGS_FILE, {});
   const ctrl = (s.unifiControllers || []).find(c => c.id === req.params.id);
   if (!ctrl) return res.status(404).json({ error: 'not found' });
@@ -1533,7 +1549,7 @@ app.delete('/api/cisco/devices/:id', requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/cisco/devices/:id/import', requireAdmin, async (req, res) => {
+app.post('/api/cisco/devices/:id/import', requireOperator, async (req, res) => {
   const s = readJSON(SETTINGS_FILE, {});
   const cfg = (s.ciscoDevices || []).find(c => c.id === req.params.id);
   if (!cfg) return res.status(404).json({ error: 'not found' });
@@ -1575,7 +1591,7 @@ function cidrBase(ip, prefix) {
 
 // ---------- Скан подсети (ping-sweep) ----------
 // Ограничиваем /24 (максимум 256 адресов) — чтобы не превратить кнопку в inadvertent DoS по сети
-app.post('/api/discovery/scan', requireAdmin, async (req, res) => {
+app.post('/api/discovery/scan', requireOperator, async (req, res) => {
   const cidr = (req.body && req.body.cidr || '').trim();
   const m = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\/(\d{1,2})$/.exec(cidr);
   if (!m) return res.status(400).json({ error: 'invalid_cidr', message: 'Укажите диапазон в формате 192.168.1.0/24' });
@@ -1609,7 +1625,7 @@ app.post('/api/discovery/scan', requireAdmin, async (req, res) => {
 });
 
 // ---------- ARP-таблица с MikroTik (IP + MAC + порт роутера) ----------
-app.post('/api/mikrotik/routers/:id/arp', requireAdmin, async (req, res) => {
+app.post('/api/mikrotik/routers/:id/arp', requireOperator, async (req, res) => {
   const s = readJSON(SETTINGS_FILE, {});
   const routerCfg = (s.mikrotiks || []).find(r => r.id === req.params.id);
   if (!routerCfg) return res.status(404).json({ error: 'not found' });
@@ -1634,7 +1650,7 @@ app.post('/api/mikrotik/routers/:id/arp', requireAdmin, async (req, res) => {
 });
 
 // ---------- Соседи по MikroTik Neighbor Discovery (кто к какому порту подключён) ----------
-app.post('/api/mikrotik/routers/:id/neighbors', requireAdmin, async (req, res) => {
+app.post('/api/mikrotik/routers/:id/neighbors', requireOperator, async (req, res) => {
   const s = readJSON(SETTINGS_FILE, {});
   const routerCfg = (s.mikrotiks || []).find(r => r.id === req.params.id);
   if (!routerCfg) return res.status(404).json({ error: 'not found' });
@@ -1702,7 +1718,7 @@ function ensureRouterDevice(db, routerCfg) {
 }
 
 // Принять выбранные из обнаружения устройства и добавить в реестр одним запросом
-app.post('/api/discovery/add-bulk', requireAdmin, (req, res) => {
+app.post('/api/discovery/add-bulk', requireOperator, (req, res) => {
   const { items } = req.body || {}; // [{ name, ip, mac, category, type }]
   if (!Array.isArray(items)) return res.status(400).json({ error: 'items_required' });
   const db = readDB();
@@ -1735,7 +1751,7 @@ app.post('/api/discovery/add-bulk', requireAdmin, (req, res) => {
 });
 
 // ---------- Автопостроение топологии по данным одного роутера (neighbors + arp) ----------
-app.post('/api/topology/build/:routerId', requireAdmin, async (req, res) => {
+app.post('/api/topology/build/:routerId', requireOperator, async (req, res) => {
   const s = readJSON(SETTINGS_FILE, {});
   const routerCfg = (s.mikrotiks || []).find(r => r.id === req.params.routerId);
   if (!routerCfg) return res.status(404).json({ error: 'not found' });
@@ -1811,7 +1827,7 @@ app.get('/api/topology', requireAuth, (req, res) => {
 // ---------- Ручное редактирование связей на карте ----------
 // Для неуправляемых свитчей LLDP/MNDP недоступен — здесь можно провести линию между
 // двумя устройствами руками (например, с подписью порта или просто «через свитч в шкафу»).
-app.post('/api/topology/edges', requireAdmin, (req, res) => {
+app.post('/api/topology/edges', requireOperator, (req, res) => {
   const { from, to, label } = req.body || {};
   if (!from || !to || from === to) return res.status(400).json({ error: 'invalid_edge', message: 'Нужны два разных устройства' });
   const db = readDB();
@@ -1825,7 +1841,7 @@ app.post('/api/topology/edges', requireAdmin, (req, res) => {
   res.json(edge);
 });
 
-app.put('/api/topology/edges/:id', requireAdmin, (req, res) => {
+app.put('/api/topology/edges/:id', requireOperator, (req, res) => {
   const topo = readJSON(TOPOLOGY_FILE, { edges: [] });
   const edge = topo.edges.find(e => e.id === req.params.id);
   if (!edge) return res.status(404).json({ error: 'not_found' });
@@ -1834,7 +1850,7 @@ app.put('/api/topology/edges/:id', requireAdmin, (req, res) => {
   res.json(edge);
 });
 
-app.delete('/api/topology/edges/:id', requireAdmin, (req, res) => {
+app.delete('/api/topology/edges/:id', requireOperator, (req, res) => {
   const topo = readJSON(TOPOLOGY_FILE, { edges: [] });
   topo.edges = topo.edges.filter(e => e.id !== req.params.id);
   writeJSON(TOPOLOGY_FILE, topo);
@@ -1846,7 +1862,7 @@ app.get('/api/subnet-rules', requireAuth, (req, res) => {
   res.json(readJSON(SETTINGS_FILE, {}).subnetRules || []);
 });
 
-app.post('/api/subnet-rules', requireAdmin, (req, res) => {
+app.post('/api/subnet-rules', requireOperator, (req, res) => {
   const { rules } = req.body || {};
   if (!Array.isArray(rules)) return res.status(400).json({ error: 'rules_required' });
   const cidrRe = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\/(\d{1,2})$/;
@@ -1894,8 +1910,29 @@ app.post('/api/features', requireAdmin, (req, res) => {
 // ---------- Аудит-лог ----------
 app.get('/api/audit-log', requireAdmin, (req, res) => {
   const store = readJSON(AUDIT_FILE, { entries: [] });
-  const limit = Math.min(1000, Number(req.query.limit) || 200);
-  res.json(store.entries.slice(-limit).reverse());
+  const all = [...store.entries].reverse();
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const pageSize = Math.min(500, Math.max(1, Number(req.query.pageSize) || 50));
+  const start = (page - 1) * pageSize;
+  res.json({
+    entries: all.slice(start, start + pageSize),
+    total: all.length,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(all.length / pageSize))
+  });
+});
+
+app.get('/api/audit-log/export.csv', requireAdmin, (req, res) => {
+  const store = readJSON(AUDIT_FILE, { entries: [] });
+  const header = ['time', 'user', 'action', 'details'];
+  const rows = [...store.entries].reverse().map(e => [
+    new Date(e.t).toISOString(), e.user, e.action, e.details
+  ].map(csvCell).join(','));
+  const csv = '\uFEFF' + [header.join(','), ...rows].join('\r\n');
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="netmonitor-audit-log-${new Date().toISOString().slice(0, 10)}.csv"`);
+  res.send(csv);
 });
 
 // ==================== РЕЗЕРВНОЕ КОПИРОВАНИЕ / ВОССТАНОВЛЕНИЕ ====================
@@ -1991,7 +2028,7 @@ function parseCsvLine(line) {
   return out.map(s => s.trim());
 }
 
-app.post('/api/devices/import-csv', requireAdmin, (req, res) => {
+app.post('/api/devices/import-csv', requireOperator, (req, res) => {
   const { csv } = req.body || {};
   if (!csv || typeof csv !== 'string') return res.status(400).json({ error: 'csv_required' });
   const lines = csv.split(/\r?\n/).filter(l => l.trim().length);

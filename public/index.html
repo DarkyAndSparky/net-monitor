@@ -15,12 +15,7 @@
     <h2><img id="login-logo" src="/api/branding/logo" alt="" style="height:22px; vertical-align:middle; margin-right:8px;">Вход в <span id="login-app-name">NetMonitor</span></h2>
     <form id="login-form">
       <label>Логин<input type="text" id="l-username" autocomplete="username" required></label>
-      <label>Пароль
-        <div class="password-wrap">
-          <input type="password" id="l-password" autocomplete="current-password" required>
-          <button type="button" class="pw-toggle" onclick="(function(btn){var inp=document.getElementById('l-password');inp.type=inp.type==='password'?'text':'password';btn.querySelector('i').className=inp.type==='password'?'ti ti-eye':'ti ti-eye-off';})(this)" aria-label="Показать пароль"><i class="ti ti-eye"></i></button>
-        </div>
-      </label>
+      <label>Пароль<input type="password" id="l-password" autocomplete="current-password" required></label>
       <div id="login-error" class="form-error hidden"></div>
       <div class="modal-actions">
         <button type="submit" class="btn-primary" style="width:100%">Войти</button>
@@ -34,17 +29,13 @@
   <aside class="sidebar">
     <div class="logo"><img id="sidebar-logo" src="/api/branding/logo" alt="" style="height:24px; vertical-align:middle; margin-right:8px;"><span id="sidebar-app-name">NetMonitor</span></div>
     <nav>
-      <div class="nav-group-label">Обзор</div>
-      <button class="nav-btn active" data-tab="dashboard"><i class="ti ti-layout-dashboard" aria-hidden="true"></i> Дешборд</button>
-      <button class="nav-btn" data-tab="map"><i class="ti ti-topology-star" aria-hidden="true"></i> Карта сети</button>
-      <button class="nav-btn hidden" data-tab="incidents" id="nav-incidents"><i class="ti ti-alert-triangle" aria-hidden="true"></i> Инциденты</button>
-      <div class="nav-group-label">Реестр</div>
-      <button class="nav-btn" data-tab="devices"><i class="ti ti-server-2" aria-hidden="true"></i> Устройства</button>
-      <div class="nav-group-label">Инструменты</div>
-      <button class="nav-btn" data-tab="monitoring"><i class="ti ti-activity" aria-hidden="true"></i> Мониторинг</button>
-      <button class="nav-btn admin-only" data-tab="discovery" id="nav-discovery"><i class="ti ti-radar" aria-hidden="true"></i> Обнаружение</button>
-      <div class="nav-group-label">Система</div>
-      <button class="nav-btn" data-tab="settings"><i class="ti ti-settings" aria-hidden="true"></i> Настройки</button>
+      <button class="nav-btn active" data-tab="dashboard">📊 Дешборд</button>
+      <button class="nav-btn" data-tab="devices">🗂 Устройства</button>
+      <button class="nav-btn" data-tab="monitoring">🛎 Мониторинг</button>
+      <button class="nav-btn hidden" data-tab="incidents" id="nav-incidents">🚨 Инциденты</button>
+      <button class="nav-btn admin-only" data-tab="discovery" id="nav-discovery">🔍 Обнаружение</button>
+      <button class="nav-btn" data-tab="map">🗺 Карта сети</button>
+      <button class="nav-btn" data-tab="settings">⚙ Настройки</button>
     </nav>
     <div class="sidebar-footer">
       <div id="current-user" style="margin-bottom:8px;"></div>
@@ -191,11 +182,6 @@
         Кликните по существующей линии, чтобы удалить её. <button class="small-btn" id="link-edit-exit">Готово</button>
       </div>
       <div class="map-wrap">
-        <div class="map-zoom-controls">
-          <button id="zoom-in-btn2" title="Увеличить"><i class="ti ti-plus"></i></button>
-          <button id="zoom-fit-btn2" title="Уместить всё"><i class="ti ti-maximize"></i></button>
-          <button id="zoom-out-btn2" title="Уменьшить"><i class="ti ti-minus"></i></button>
-        </div>
         <svg id="network-svg" viewBox="0 0 1000 650" xmlns="http://www.w3.org/2000/svg"></svg>
       </div>
       <div class="legend" id="map-legend"></div>
@@ -319,8 +305,8 @@
           <p class="hint" style="margin-top:10px;">Выбор запоминается в этом браузере и не влияет на других пользователей.</p>
         </div>
 
-        <h2 class="admin-only">Брендинг (общее для всех пользователей)</h2>
-        <div class="settings-panel admin-only" style="max-width:520px;">
+        <h2 class="admin-only strict-admin-only">Брендинг (общее для всех пользователей)</h2>
+        <div class="settings-panel admin-only strict-admin-only" style="max-width:520px;">
           <form id="branding-form">
             <label>Название приложения<input type="text" id="brand-name" placeholder="NetMonitor" maxlength="40"></label>
             <label>Акцентный цвет (кнопки, ссылки, выделения)<input type="color" id="brand-accent"></label>
@@ -424,7 +410,8 @@
         <button type="button" class="btn-secondary" id="mt-import-all-btn">Импортировать со всех MikroTik разом</button>
         <div id="mt-import-all-result" class="hint" style="margin-top:8px;"></div>
 
-        <h2 style="margin-top:22px;">Добавить подключение</h2>
+        <h2 style="margin-top:22px;" class="strict-admin-only">Добавить подключение</h2>
+        <div class="strict-admin-only">
         <form id="connection-form">
           <label>Тип
             <select id="conn-type">
@@ -450,6 +437,7 @@
         <p class="hint hidden" id="conn-hint-unifi">UniFi: логин/пароль локального администратора контроллера. <b>Порт по умолчанию зависит от типа консоли</b> — 443 для UniFi OS (UDM/UDM Pro/Cloud Key Gen2+), 8443 для классического software-контроллера или Cloud Key Gen1 (самая частая причина «не подключается» — неверный порт). Самоподписанный сертификат контроллера принимается автоматически. Импортируются и инфраструктура (точки доступа/свитчи/шлюзы), и подключённые клиенты.</p>
         <p class="hint hidden" id="conn-hint-cisco">Cisco: подключение по SSH, выполняется команда <code>show ip arp</code>. Нужен пользователь с правом просмотра (privilege level 15 надёжнее всего). Работает для большинства IOS/IOS-XE с включённым SSH.</p>
         <p class="hint">Устройства из импорта попадают в реестр с пометкой источника; мониторинг для них по умолчанию выключен — включите нужные во вкладке «Мониторинг».</p>
+        </div>
       </div>
       </div>
 
@@ -474,8 +462,8 @@
 
       <!-- ПОЛЬЗОВАТЕЛИ -->
       <div class="settings-subtab hidden" data-settings-panel="users">
-      <h2 class="admin-only">Пользователи</h2>
-      <div class="settings-panel admin-only" style="max-width:520px;">
+      <h2 class="admin-only strict-admin-only">Пользователи</h2>
+      <div class="settings-panel admin-only strict-admin-only" style="max-width:520px;">
         <table id="users-table" style="margin-bottom:14px;">
           <thead><tr><th>Логин</th><th>Роль</th><th></th></tr></thead>
           <tbody id="users-tbody"></tbody>
@@ -487,9 +475,11 @@
           <label>Роль
             <select id="u-role">
               <option value="viewer">Только просмотр</option>
+              <option value="operator">Operator (повседневная работа)</option>
               <option value="admin">Администратор</option>
             </select>
           </label>
+          <p class="hint">Operator: устройства, карта, мониторинг, обнаружение сети, алерты, категории — без доступа к пользователям, брендингу, резервным копиям, фиче-флагам и учётным данным интеграций.</p>
           <div class="modal-actions" style="justify-content:flex-start;">
             <button type="submit" class="btn-primary">Добавить пользователя</button>
           </div>
@@ -501,8 +491,8 @@
 
       <!-- ФУНКЦИИ -->
       <div class="settings-subtab hidden" data-settings-panel="features">
-      <h2 class="admin-only">Функции (дополнительные модули)</h2>
-      <div class="settings-panel admin-only" style="max-width:640px;">
+      <h2 class="admin-only strict-admin-only">Функции (дополнительные модули)</h2>
+      <div class="settings-panel admin-only strict-admin-only" style="max-width:640px;">
         <p class="hint">Каждый модуль выключен по умолчанию — включайте только то, что реально нужно, чтобы не грузить сеть и сервер лишним опросом.</p>
         <form id="features-form">
           <label class="checkbox-label"><input type="checkbox" id="feat-snmp"> <b>SNMP-мониторинг</b> — аптайм и загрузка CPU по SNMP (для устройств, у которых включён SNMP-агент, например MikroTik)</label>
@@ -519,8 +509,8 @@
 
       <!-- ИМПОРТ/ЭКСПОРТ -->
       <div class="settings-subtab hidden" data-settings-panel="io">
-      <h2 class="admin-only">Резервная копия</h2>
-      <div class="settings-panel admin-only" style="max-width:640px;">
+      <h2 class="admin-only strict-admin-only">Резервная копия</h2>
+      <div class="settings-panel admin-only strict-admin-only" style="max-width:640px;">
         <p class="hint">Полный снимок данных (устройства, пользователи, настройки, история, топология, инциденты, аудит-лог) в одном JSON-файле. Секрет сессии в бэкап не входит — он привязан к конкретной инсталляции.</p>
         <div class="modal-actions" style="justify-content:flex-start; gap:10px;">
           <button type="button" class="btn-primary" id="backup-download-btn">⬇ Скачать бэкап</button>
@@ -565,13 +555,23 @@
 
       <!-- АУДИТ-ЛОГ -->
       <div class="settings-subtab hidden" data-settings-panel="audit">
-      <h2 class="admin-only">Аудит-лог</h2>
-      <div class="settings-panel admin-only" style="max-width:760px;">
+      <h2 class="admin-only strict-admin-only">Аудит-лог</h2>
+      <div class="settings-panel admin-only strict-admin-only" style="max-width:760px;">
         <p class="hint" id="audit-log-hint">Требует включения функции «Аудит-лог» в разделе «Функции».</p>
+        <div class="modal-actions hidden" id="audit-log-actions" style="justify-content:flex-start; margin-bottom:10px;">
+          <a class="btn-secondary" href="/api/audit-log/export.csv" style="text-decoration:none;">⬇ Скачать CSV</a>
+        </div>
         <table id="audit-log-table" class="hidden">
           <thead><tr><th>Время</th><th>Пользователь</th><th>Действие</th><th>Детали</th></tr></thead>
           <tbody id="audit-log-tbody"></tbody>
         </table>
+        <div id="audit-log-pagination" class="pagination-bar hidden">
+          <span id="audit-log-pagination-info" class="hint"></span>
+          <div class="view-toggle">
+            <button id="audit-log-prev-btn">‹ Назад</button>
+            <button id="audit-log-next-btn">Вперёд ›</button>
+          </div>
+        </div>
       </div>
       </div>
 
@@ -666,21 +666,6 @@
         <button type="submit" class="btn-primary">Сохранить</button>
       </div>
     </form>
-  </div>
-</div>
-
-<!-- Toast-уведомления -->
-<div id="toast-container" role="region" aria-live="polite" aria-label="Уведомления"></div>
-
-<!-- Кастомный диалог подтверждения (замена confirm()) -->
-<div id="confirm-dialog-overlay" class="hidden" role="dialog" aria-modal="true" aria-labelledby="confirm-dialog-title">
-  <div id="confirm-dialog">
-    <h3 id="confirm-dialog-title">Подтвердите действие</h3>
-    <p id="confirm-dialog-text"></p>
-    <div class="modal-actions">
-      <button class="btn-secondary" id="confirm-dialog-cancel">Отмена</button>
-      <button id="confirm-dialog-ok">Удалить</button>
-    </div>
   </div>
 </div>
 
