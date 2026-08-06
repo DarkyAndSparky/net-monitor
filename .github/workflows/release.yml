@@ -1,0 +1,48 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set version
+        id: version
+        run: echo "TAG=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Create release archive
+        run: |
+          zip -r net-monitor-${{ steps.version.outputs.TAG }}.zip . \
+            -x "*.git*" \
+            -x "data/*" \
+            -x "certs/*" \
+            -x "node_modules/*" \
+            -x "*.DS_Store"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: net-monitor ${{ steps.version.outputs.TAG }}
+          body: |
+            See [CHANGELOG.md](CHANGELOG.md) for what's new.
+
+            **Quick install:**
+            ```bash
+            # Linux / macOS
+            unzip net-monitor-${{ steps.version.outputs.TAG }}.zip
+            cd net-monitor
+            npm install
+            node server.js
+            ```
+          files: net-monitor-${{ steps.version.outputs.TAG }}.zip
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') }}

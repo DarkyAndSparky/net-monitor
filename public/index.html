@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Мониторинг сети</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ЭКРАН ЛОГИНА -->
+<div id="login-overlay" class="modal-overlay hidden">
+  <div class="modal">
+    <h2><img id="login-logo" src="/api/branding/logo" alt="" style="height:22px; vertical-align:middle; margin-right:8px;">Вход в <span id="login-app-name">NetMonitor</span></h2>
+    <form id="login-form">
+      <label>Логин<input type="text" id="l-username" autocomplete="username" required></label>
+      <label>Пароль
+        <div class="password-wrap">
+          <input type="password" id="l-password" autocomplete="current-password" required>
+          <button type="button" class="pw-toggle" onclick="(function(btn){var inp=document.getElementById('l-password');inp.type=inp.type==='password'?'text':'password';btn.querySelector('i').className=inp.type==='password'?'ti ti-eye':'ti ti-eye-off';})(this)" aria-label="Показать пароль"><i class="ti ti-eye"></i></button>
+        </div>
+      </label>
+      <div id="login-error" class="form-error hidden"></div>
+      <div class="modal-actions">
+        <button type="submit" class="btn-primary" style="width:100%">Войти</button>
+      </div>
+      <div class="hint" style="margin-top:6px;">По умолчанию: admin / admin — смените пароль после входа в разделе «Настройки».</div>
+    </form>
+  </div>
+</div>
+
+<div class="app hidden" id="app-root">
+  <aside class="sidebar">
+    <div class="logo"><img id="sidebar-logo" src="/api/branding/logo" alt="" style="height:24px; vertical-align:middle; margin-right:8px;"><span id="sidebar-app-name">NetMonitor</span></div>
+    <nav>
+      <div class="nav-group-label">Обзор</div>
+      <button class="nav-btn active" data-tab="dashboard"><i class="ti ti-layout-dashboard" aria-hidden="true"></i> Дешборд</button>
+      <button class="nav-btn" data-tab="map"><i class="ti ti-topology-star" aria-hidden="true"></i> Карта сети</button>
+      <button class="nav-btn hidden" data-tab="incidents" id="nav-incidents"><i class="ti ti-alert-triangle" aria-hidden="true"></i> Инциденты</button>
+      <div class="nav-group-label">Реестр</div>
+      <button class="nav-btn" data-tab="devices"><i class="ti ti-server-2" aria-hidden="true"></i> Устройства</button>
+      <div class="nav-group-label">Инструменты</div>
+      <button class="nav-btn" data-tab="monitoring"><i class="ti ti-activity" aria-hidden="true"></i> Мониторинг</button>
+      <button class="nav-btn admin-only" data-tab="discovery" id="nav-discovery"><i class="ti ti-radar" aria-hidden="true"></i> Обнаружение</button>
+      <div class="nav-group-label">Система</div>
+      <button class="nav-btn" data-tab="settings"><i class="ti ti-settings" aria-hidden="true"></i> Настройки</button>
+    </nav>
+    <div class="sidebar-footer">
+      <div id="current-user" style="margin-bottom:8px;"></div>
+      <button id="logout-btn" class="btn-secondary" style="width:100%;">Выйти</button>
+      <div id="app-version" class="hint" style="margin-top:10px; text-align:center;"></div>
+    </div>
+  </aside>
+
+  <main class="content">
+
+    <!-- ДЕШБОРД -->
+    <section id="tab-dashboard" class="tab active">
+      <h1>Дешборд мониторинга</h1>
+
+      <div class="cards-row" id="category-cards"></div>
+
+      <h2>Ключевые устройства</h2>
+      <div class="key-devices" id="key-devices"></div>
+    </section>
+
+    <!-- УСТРОЙСТВА -->
+    <section id="tab-devices" class="tab">
+      <div class="tab-header">
+        <h1>Устройства</h1>
+        <div class="controls">
+          <select id="filter-category">
+            <option value="">Все категории</option>
+          </select>
+          <input id="search-input" type="text" placeholder="Поиск: имя / IP / MAC / расположение">
+          <div class="view-toggle">
+            <button id="view-table-btn" class="active">Таблица</button>
+            <button id="view-cards-btn">Карточки</button>
+          </div>
+          <button class="btn-secondary" id="export-devices-csv-btn">⬇ Экспорт CSV</button>
+          <button class="btn-primary admin-only" id="add-device-btn">+ Добавить устройство</button>
+        </div>
+      </div>
+
+      <div id="bulk-actions-bar" class="bulk-actions-bar hidden admin-only">
+        <span id="bulk-selected-count">Выбрано: 0</span>
+        <select id="bulk-category-select"></select>
+        <button class="small-btn" id="bulk-apply-category">Сменить категорию</button>
+        <button class="small-btn" id="bulk-enable-monitoring">Включить мониторинг</button>
+        <button class="small-btn" id="bulk-disable-monitoring">Выключить мониторинг</button>
+        <button class="small-btn" id="bulk-delete-btn" style="color:var(--red);">🗑 Удалить выбранные</button>
+        <button class="small-btn" id="bulk-clear-selection">Снять выделение</button>
+      </div>
+
+      <div id="devices-table-wrap">
+        <table id="devices-table">
+          <thead>
+            <tr>
+              <th class="admin-only"><input type="checkbox" id="select-all-devices"></th>
+              <th></th>
+              <th class="sortable" data-sort="name">Название</th>
+              <th class="sortable" data-sort="ip">IP</th>
+              <th class="sortable" data-sort="mac">MAC</th>
+              <th class="sortable" data-sort="location">Расположение</th>
+              <th class="sortable" data-sort="type">Тип</th>
+              <th class="sortable" data-sort="category">Категория</th>
+              <th>Комментарий</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="devices-tbody"></tbody>
+        </table>
+        <div id="devices-empty-state" class="hint hidden" style="padding:24px; text-align:center;"></div>
+      </div>
+
+      <div id="devices-cards-wrap" class="cards-grid hidden"></div>
+
+      <div id="devices-pagination" class="pagination-bar hidden">
+        <span id="pagination-info" class="hint"></span>
+        <div class="view-toggle">
+          <button id="page-prev-btn">‹ Назад</button>
+          <button id="page-next-btn">Вперёд ›</button>
+        </div>
+        <select id="page-size-select">
+          <option value="25">25 на странице</option>
+          <option value="50" selected>50 на странице</option>
+          <option value="100">100 на странице</option>
+          <option value="99999">Показать все</option>
+        </select>
+      </div>
+    </section>
+
+    <!-- ОБНАРУЖЕНИЕ -->
+    <section id="tab-discovery" class="tab">
+      <h1>Обнаружение сети</h1>
+
+      <h2>Скан подсети (ping-sweep)</h2>
+      <div class="settings-panel" style="max-width:640px;">
+        <div class="controls" style="margin-bottom:10px;">
+          <input type="text" id="scan-cidr" placeholder="192.168.1.0/24" style="min-width:200px;">
+          <button class="btn-primary" id="scan-btn">Сканировать</button>
+        </div>
+        <p class="hint">Найденные подсети сервера: <span id="local-subnets-hint">—</span>. Поддерживается диапазон от /24 до /30 (не более 256 адресов за раз).</p>
+        <div id="scan-result" class="hint" style="margin:8px 0;"></div>
+        <table id="scan-table" class="hidden">
+          <thead><tr><th></th><th>IP</th><th>Имя хоста</th><th>Статус</th><th></th></tr></thead>
+          <tbody id="scan-tbody"></tbody>
+        </table>
+        <button class="btn-secondary hidden" id="scan-add-selected" style="margin-top:10px;">Добавить отмеченные в реестр</button>
+      </div>
+
+      <h2>ARP-таблица и соседи MikroTik</h2>
+      <div class="settings-panel" style="max-width:640px;">
+        <div class="controls" style="margin-bottom:10px;">
+          <select id="discovery-router-select"></select>
+          <button class="btn-secondary" id="arp-btn">Получить ARP-таблицу</button>
+          <button class="btn-secondary" id="neighbors-btn">Получить соседей (MNDP)</button>
+          <button class="btn-primary" id="build-topology-btn">Построить топологию на карте</button>
+        </div>
+        <p class="hint">ARP-таблица показывает все IP/MAC, которые роутер видел в своей сети, с указанием порта. MNDP-соседи — устройства MikroTik/RouterOS, обнаруженные напрямую (имя, платформа, порт). «Построить топологию» использует оба источника и рисует реальные связи на карте вместо условной звезды.</p>
+        <div id="discovery-mt-result" class="hint" style="margin:8px 0;"></div>
+        <table id="discovery-mt-table" class="hidden">
+          <thead><tr><th></th><th>Имя/IP</th><th>MAC</th><th>Порт</th><th>Статус</th><th></th></tr></thead>
+          <tbody id="discovery-mt-tbody"></tbody>
+        </table>
+        <button class="btn-secondary hidden" id="mt-add-selected" style="margin-top:10px;">Добавить отмеченные в реестр</button>
+      </div>
+    </section>
+
+    <!-- КАРТА СЕТИ -->
+    <section id="tab-map" class="tab">
+      <div class="tab-header">
+        <h1>Карта сети</h1>
+        <div class="controls">
+          <input type="text" id="map-search" placeholder="Найти устройство: имя / IP / MAC" style="min-width:200px;">
+          <button class="btn-secondary admin-only" id="link-edit-btn">🔗 Редактировать связи</button>
+          <button class="btn-secondary admin-only" id="subnet-rules-btn">☁ Правила подсетей</button>
+          <button class="btn-secondary" id="tree-view-btn">🌳 Дерево</button>
+          <button class="btn-secondary hidden" id="tree-orientation-btn" title="Сменить ориентацию дерева">⇄ Горизонтально</button>
+          <div class="view-toggle">
+            <button id="zoom-out-btn" title="Уменьшить">−</button>
+            <button id="zoom-fit-btn" title="Уместить всё">⛶</button>
+            <button id="zoom-in-btn" title="Увеличить">+</button>
+          </div>
+        </div>
+      </div>
+      <div id="map-search-result" class="hint hidden" style="margin-bottom:8px;"></div>
+      <div id="link-edit-hint" class="hint hidden" style="margin-bottom:8px;">
+        Режим редактирования связей: кликните первое устройство, затем второе — появится линия.
+        Кликните по существующей линии, чтобы удалить её. <button class="small-btn" id="link-edit-exit">Готово</button>
+      </div>
+      <div class="map-wrap">
+        <div class="map-zoom-controls">
+          <button id="zoom-in-btn2" title="Увеличить"><i class="ti ti-plus"></i></button>
+          <button id="zoom-fit-btn2" title="Уместить всё"><i class="ti ti-maximize"></i></button>
+          <button id="zoom-out-btn2" title="Уменьшить"><i class="ti ti-minus"></i></button>
+        </div>
+        <svg id="network-svg" viewBox="0 0 1000 650" xmlns="http://www.w3.org/2000/svg"></svg>
+      </div>
+      <div class="legend" id="map-legend"></div>
+      <div class="hint" id="topology-hint" style="margin-top:8px;">Перетаскивайте узлы мышью, позиция сохранится автоматически · колесо мыши — зум</div>
+    </section>
+
+    <!-- ПРАВИЛА ПОДСЕТЕЙ (модалка) -->
+    <div id="subnet-rules-modal" class="modal-overlay hidden">
+      <div class="modal" style="width:560px;">
+        <h2>Правила подсетей</h2>
+        <p class="hint">Устройства, чей IP попадает в диапазон, визуально группируются на карте в «облако» с подписью — удобно, когда нет реальной топологии портов, но есть чёткая сегментация по подсетям/VLAN. Пример: <code>10.7.7.0/24</code> → «Wi-Fi клиенты».</p>
+        <table id="subnet-rules-table" style="margin-bottom:12px;">
+          <thead><tr><th>CIDR</th><th>Название</th><th>Цвет</th><th></th></tr></thead>
+          <tbody id="subnet-rules-tbody"></tbody>
+        </table>
+        <div class="modal-actions" style="justify-content:flex-start; gap:10px;">
+          <button type="button" class="btn-secondary" id="subnet-rule-add-row">+ Добавить правило</button>
+        </div>
+        <div id="subnet-rules-result" class="hint" style="margin:8px 0;"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" id="subnet-rules-close">Закрыть</button>
+          <button type="button" class="btn-primary" id="subnet-rules-save">Сохранить</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Подсказка для новой ручной связи (label) -->
+    <div id="link-label-modal" class="modal-overlay hidden">
+      <div class="modal" style="width:380px;">
+        <h2>Подпись связи</h2>
+        <form id="link-label-form">
+          <label>Например: «через свитч в шкафу», «порт 4»<input type="text" id="link-label-input" placeholder="необязательно"></label>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" id="link-label-cancel">Отмена</button>
+            <button type="submit" class="btn-primary">Создать связь</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- МОНИТОРИНГ -->
+    <section id="tab-monitoring" class="tab">
+      <div class="tab-header">
+        <h1>Мониторинг</h1>
+        <div class="controls">
+          <span class="hint" id="monitoring-count"></span>
+          <button class="btn-secondary admin-only" id="mon-add-all">Добавить все устройства</button>
+          <button class="btn-secondary admin-only" id="mon-remove-all">Убрать все из мониторинга</button>
+        </div>
+      </div>
+      <p class="hint">Опрашиваются (пингуются) только устройства из этого списка. Каждое — со своим интервалом. Остальные устройства просто хранятся в реестре без опроса.</p>
+      <table id="monitoring-table">
+        <thead>
+          <tr>
+            <th>Мониторить</th>
+            <th>Алерты</th>
+            <th>Название</th>
+            <th>IP</th>
+            <th>Категория</th>
+            <th>Статус</th>
+            <th>Последняя проверка</th>
+            <th>Интервал</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="monitoring-tbody"></tbody>
+      </table>
+    </section>
+
+    <!-- ИНЦИДЕНТЫ -->
+    <section id="tab-incidents" class="tab">
+      <div class="tab-header">
+        <h1>Инциденты</h1>
+        <div class="controls">
+          <span class="hint" id="incidents-stats"></span>
+        </div>
+      </div>
+
+      <h2>Сейчас недоступны</h2>
+      <div id="incidents-open-wrap">
+        <table id="incidents-open-table">
+          <thead><tr><th>Устройство</th><th>С какого момента</th><th>Длится</th><th>Эскалация</th></tr></thead>
+          <tbody id="incidents-open-tbody"></tbody>
+        </table>
+      </div>
+
+      <h2>История (последние 200)</h2>
+      <div id="incidents-closed-wrap">
+        <table id="incidents-closed-table">
+          <thead><tr><th>Устройство</th><th>Начало</th><th>Окончание</th><th>Длительность</th><th>Эскалация</th></tr></thead>
+          <tbody id="incidents-closed-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- НАСТРОЙКИ -->
+    <section id="tab-settings" class="tab">
+      <h1>Настройки</h1>
+
+      <div class="settings-subnav">
+        <button class="settings-tab-btn active" data-settings-tab="appearance">🎨 Внешний вид</button>
+        <button class="settings-tab-btn admin-only" data-settings-tab="alerts">🔔 Алерты</button>
+        <button class="settings-tab-btn admin-only" data-settings-tab="mikrotik">🔌 Интеграции</button>
+        <button class="settings-tab-btn admin-only" data-settings-tab="categories">🏷 Категории</button>
+        <button class="settings-tab-btn admin-only" data-settings-tab="users">👥 Пользователи</button>
+        <button class="settings-tab-btn admin-only" data-settings-tab="features">🧩 Функции</button>
+        <button class="settings-tab-btn admin-only" data-settings-tab="io">⇅ Импорт/Экспорт</button>
+        <button class="settings-tab-btn admin-only" data-settings-tab="audit">📜 Аудит-лог</button>
+        <button class="settings-tab-btn" data-settings-tab="profile">🔑 Профиль</button>
+        <button class="settings-tab-btn" data-settings-tab="about">ℹ О системе</button>
+      </div>
+
+      <!-- ВНЕШНИЙ ВИД -->
+      <div class="settings-subtab" data-settings-panel="appearance">
+        <h2>Тема</h2>
+        <div class="settings-panel" style="max-width:520px;">
+          <div class="modal-actions" style="justify-content:flex-start; gap:10px;">
+            <button type="button" class="btn-secondary theme-choice" data-theme="dark">🌙 Тёмная</button>
+            <button type="button" class="btn-secondary theme-choice" data-theme="light">☀ Светлая</button>
+          </div>
+          <p class="hint" style="margin-top:10px;">Выбор запоминается в этом браузере и не влияет на других пользователей.</p>
+        </div>
+
+        <h2 class="admin-only">Брендинг (общее для всех пользователей)</h2>
+        <div class="settings-panel admin-only" style="max-width:520px;">
+          <form id="branding-form">
+            <label>Название приложения<input type="text" id="brand-name" placeholder="NetMonitor" maxlength="40"></label>
+            <label>Акцентный цвет (кнопки, ссылки, выделения)<input type="color" id="brand-accent"></label>
+            <label>Тема по умолчанию (для тех, кто ещё не выбрал свою)
+              <select id="brand-default-theme">
+                <option value="dark">Тёмная</option>
+                <option value="light">Светлая</option>
+              </select>
+            </label>
+            <div class="modal-actions" style="justify-content:flex-start;">
+              <button type="submit" class="btn-primary">Сохранить</button>
+            </div>
+            <div id="branding-result" class="hint" style="margin-top:8px;"></div>
+          </form>
+
+          <div style="border-top:1px solid var(--border); margin:14px 0 10px 0; padding-top:12px;">
+            <p class="hint" style="margin-bottom:8px;">Текущий логотип: <img id="logo-preview" src="/api/branding/logo" alt="логотип" style="height:28px; vertical-align:middle; margin-left:6px;"></p>
+            <label>Загрузить свой (SVG, PNG или JPG, до 1 МБ)
+              <input type="file" id="logo-file" accept=".svg,.png,.jpg,.jpeg">
+            </label>
+            <div class="modal-actions" style="justify-content:flex-start; margin-top:10px; gap:10px;">
+              <button type="button" class="btn-primary" id="logo-upload-btn">Загрузить</button>
+              <button type="button" class="btn-secondary" id="logo-reset-btn">Сбросить на стандартный</button>
+            </div>
+            <div id="logo-result" class="hint" style="margin-top:8px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- АЛЕРТЫ -->
+      <div class="settings-subtab hidden" data-settings-panel="alerts">
+      <h2 class="admin-only">Алерты (оповещения о недоступности)</h2>
+      <div class="settings-panel admin-only" style="max-width:560px;">
+        <form id="alert-settings-form">
+          <label class="checkbox-label"><input type="checkbox" id="al-enabled"> Включить алерты</label>
+          <label>Порог срабатывания (провалов подряд)
+            <select id="al-threshold">
+              <option value="1">1 (сразу)</option>
+              <option value="2" selected>2</option>
+              <option value="3">3</option>
+              <option value="5">5</option>
+            </select>
+          </label>
+          <label>Повторять уведомление, пока не восстановится
+            <select id="al-repeat">
+              <option value="0">Не повторять (только один раз)</option>
+              <option value="15">Каждые 15 минут</option>
+              <option value="30" selected>Каждые 30 минут</option>
+              <option value="60">Каждый час</option>
+              <option value="180">Каждые 3 часа</option>
+            </select>
+          </label>
+          <label class="checkbox-label"><input type="checkbox" id="al-recovery" checked> Уведомлять о восстановлении устройства</label>
+
+          <div style="border-top:1px solid var(--border); margin:6px 0; padding-top:12px;">
+            <label class="checkbox-label"><input type="checkbox" id="al-tg-enabled"> Telegram-бот</label>
+            <label>Bot Token<input type="password" id="al-tg-token" placeholder="123456:ABC-DEF..."></label>
+            <label>Chat ID<input type="text" id="al-tg-chat" placeholder="-1001234567890 или ваш ID"></label>
+          </div>
+
+          <div id="escalation-block" class="hidden" style="border-top:1px solid var(--border); margin:6px 0; padding-top:12px;">
+            <label class="checkbox-label"><input type="checkbox" id="al-esc-enabled"> Эскалация — доп. уведомление, если проблема не решается долго</label>
+            <label>Через сколько минут простоя эскалировать
+              <select id="al-esc-minutes">
+                <option value="30">30 минут</option>
+                <option value="60" selected>1 час</option>
+                <option value="180">3 часа</option>
+                <option value="360">6 часов</option>
+              </select>
+            </label>
+            <label>Telegram Chat ID для эскалации (например, дежурный инженер отдельно от общего чата)<input type="text" id="al-esc-chat" placeholder="-1009876543210"></label>
+          </div>
+
+          <div style="border-top:1px solid var(--border); margin:6px 0; padding-top:12px;">
+            <label class="checkbox-label"><input type="checkbox" id="al-wh-enabled"> Webhook (произвольный URL, POST JSON)</label>
+            <label>URL<input type="text" id="al-wh-url" placeholder="https://example.com/hook"></label>
+          </div>
+
+          <div class="modal-actions" style="justify-content:flex-start; gap:10px;">
+            <button type="submit" class="btn-secondary">Сохранить</button>
+            <button type="button" class="btn-primary" id="al-test-btn">Отправить тестовое</button>
+          </div>
+          <div id="al-result" class="hint" style="margin-top:8px;"></div>
+        </form>
+        <p class="hint">
+          Как получить Telegram Bot Token: напишите @BotFather → /newbot. Chat ID своего чата можно узнать у @userinfobot,
+          для группы — добавьте бота в группу и посмотрите ID через @RawDataBot.
+          Оповещения по конкретному устройству можно отключить в его карточке (галочка «Уведомления») или во вкладке «Мониторинг».
+        </p>
+      </div>
+      </div>
+
+      <!-- MIKROTIK -->
+      <div class="settings-subtab hidden" data-settings-panel="mikrotik">
+      <h2 class="admin-only">Подключённые устройства и контроллеры</h2>
+      <div class="settings-panel admin-only" style="max-width:760px;">
+        <table id="connections-table" style="margin-bottom:14px;">
+          <thead><tr><th>Тип</th><th>Название</th><th>Адрес</th><th>Порт</th><th>Логин</th><th></th></tr></thead>
+          <tbody id="connections-tbody"></tbody>
+        </table>
+        <button type="button" class="btn-secondary" id="mt-import-all-btn">Импортировать со всех MikroTik разом</button>
+        <div id="mt-import-all-result" class="hint" style="margin-top:8px;"></div>
+
+        <h2 style="margin-top:22px;">Добавить подключение</h2>
+        <form id="connection-form">
+          <label>Тип
+            <select id="conn-type">
+              <option value="mikrotik">MikroTik (RouterOS API)</option>
+              <option value="unifi">UniFi Controller (UDM / Cloud Key / Software)</option>
+              <option value="cisco">Cisco (по SSH)</option>
+            </select>
+          </label>
+          <label>Название (для себя)<input type="text" id="conn-name" placeholder="Например: Офис — ядро"></label>
+          <label>Адрес (IP или hostname)<input type="text" id="conn-host" placeholder="192.168.1.1"></label>
+          <label id="conn-port-wrap">Порт<input type="text" id="conn-port" placeholder="8728"></label>
+          <label>Логин<input type="text" id="conn-user" placeholder="admin"></label>
+          <label>Пароль<input type="password" id="conn-password"></label>
+          <label id="conn-site-wrap" class="hidden">UniFi Site (обычно "default")<input type="text" id="conn-site" value="default"></label>
+          <label class="checkbox-label hidden" id="conn-unifios-wrap"><input type="checkbox" id="conn-unifios"> Это UniFi OS консоль (UDM / UDM Pro / Cloud Key Gen2+) — не классический software-контроллер</label>
+          <label class="checkbox-label" id="conn-tls-wrap"><input type="checkbox" id="conn-tls"> Использовать API-SSL (MikroTik, порт 8729)</label>
+          <div class="modal-actions" style="justify-content:flex-start; gap:10px;">
+            <button type="submit" class="btn-primary">Добавить</button>
+          </div>
+          <div id="conn-result" class="hint" style="margin-top:8px;"></div>
+        </form>
+        <p class="hint" id="conn-hint-mikrotik">MikroTik: требуется включённый API-сервис (IP → Services → api, порт 8728, либо api-ssl 8729).</p>
+        <p class="hint hidden" id="conn-hint-unifi">UniFi: логин/пароль локального администратора контроллера. <b>Порт по умолчанию зависит от типа консоли</b> — 443 для UniFi OS (UDM/UDM Pro/Cloud Key Gen2+), 8443 для классического software-контроллера или Cloud Key Gen1 (самая частая причина «не подключается» — неверный порт). Самоподписанный сертификат контроллера принимается автоматически. Импортируются и инфраструктура (точки доступа/свитчи/шлюзы), и подключённые клиенты.</p>
+        <p class="hint hidden" id="conn-hint-cisco">Cisco: подключение по SSH, выполняется команда <code>show ip arp</code>. Нужен пользователь с правом просмотра (privilege level 15 надёжнее всего). Работает для большинства IOS/IOS-XE с включённым SSH.</p>
+        <p class="hint">Устройства из импорта попадают в реестр с пометкой источника; мониторинг для них по умолчанию выключен — включите нужные во вкладке «Мониторинг».</p>
+      </div>
+      </div>
+
+      <!-- КАТЕГОРИИ -->
+      <div class="settings-subtab hidden" data-settings-panel="categories">
+      <h2 class="admin-only">Категории устройств</h2>
+      <div class="settings-panel admin-only" style="max-width:520px;">
+        <p class="hint">Категории используются в дешборде, фильтрах, цветах на карте и облаках подсетей. Нельзя удалить категорию, пока на неё ссылается хотя бы одно устройство — сначала перенесите их в другую.</p>
+        <table id="categories-table" style="margin-bottom:12px;">
+          <thead><tr><th>Название</th><th>Цвет</th><th></th></tr></thead>
+          <tbody id="categories-tbody"></tbody>
+        </table>
+        <div class="modal-actions" style="justify-content:flex-start; gap:10px;">
+          <button type="button" class="btn-secondary" id="category-add-row">+ Добавить категорию</button>
+        </div>
+        <div id="categories-result" class="hint" style="margin:8px 0;"></div>
+        <div class="modal-actions" style="justify-content:flex-start;">
+          <button type="button" class="btn-primary" id="categories-save">Сохранить категории</button>
+        </div>
+      </div>
+      </div>
+
+      <!-- ПОЛЬЗОВАТЕЛИ -->
+      <div class="settings-subtab hidden" data-settings-panel="users">
+      <h2 class="admin-only">Пользователи</h2>
+      <div class="settings-panel admin-only" style="max-width:520px;">
+        <table id="users-table" style="margin-bottom:14px;">
+          <thead><tr><th>Логин</th><th>Роль</th><th></th></tr></thead>
+          <tbody id="users-tbody"></tbody>
+        </table>
+        <h2 style="margin-top:22px;">Добавить пользователя</h2>
+        <form id="user-form">
+          <label>Логин<input type="text" id="u-username" placeholder="latin, 3-32 символа" required></label>
+          <label>Пароль (минимум 8 символов)<input type="password" id="u-password" required minlength="8"></label>
+          <label>Роль
+            <select id="u-role">
+              <option value="viewer">Только просмотр</option>
+              <option value="admin">Администратор</option>
+            </select>
+          </label>
+          <div class="modal-actions" style="justify-content:flex-start;">
+            <button type="submit" class="btn-primary">Добавить пользователя</button>
+          </div>
+          <div id="user-result" class="hint" style="margin-top:8px;"></div>
+        </form>
+        <p class="hint">Роль «Только просмотр» — доступ к дешборду, устройствам, карте и мониторингу без возможности что-либо менять: без добавления/редактирования/удаления устройств, без настроек, без обнаружения сети.</p>
+      </div>
+      </div>
+
+      <!-- ФУНКЦИИ -->
+      <div class="settings-subtab hidden" data-settings-panel="features">
+      <h2 class="admin-only">Функции (дополнительные модули)</h2>
+      <div class="settings-panel admin-only" style="max-width:640px;">
+        <p class="hint">Каждый модуль выключен по умолчанию — включайте только то, что реально нужно, чтобы не грузить сеть и сервер лишним опросом.</p>
+        <form id="features-form">
+          <label class="checkbox-label"><input type="checkbox" id="feat-snmp"> <b>SNMP-мониторинг</b> — аптайм и загрузка CPU по SNMP (для устройств, у которых включён SNMP-агент, например MikroTik)</label>
+          <label class="checkbox-label"><input type="checkbox" id="feat-portchecks"> <b>Проверка TCP-портов/сервисов</b> — не только ping, а что конкретный порт отвечает (например 554 у камеры, 3389 у сервера)</label>
+          <label class="checkbox-label"><input type="checkbox" id="feat-incidents"> <b>История инцидентов + эскалация алертов</b> — журнал даунтаймов (когда и на сколько устройство падало) и доп. канал оповещения, если проблема не решается долго</label>
+          <label class="checkbox-label"><input type="checkbox" id="feat-auditlog"> <b>Аудит-лог</b> — журнал действий пользователей (кто и когда добавил/изменил/удалил устройство, настройки, пользователя)</label>
+          <div class="modal-actions" style="justify-content:flex-start;">
+            <button type="submit" class="btn-primary">Сохранить</button>
+          </div>
+          <div id="features-result" class="hint" style="margin-top:8px;"></div>
+        </form>
+      </div>
+      </div>
+
+      <!-- ИМПОРТ/ЭКСПОРТ -->
+      <div class="settings-subtab hidden" data-settings-panel="io">
+      <h2 class="admin-only">Резервная копия</h2>
+      <div class="settings-panel admin-only" style="max-width:640px;">
+        <p class="hint">Полный снимок данных (устройства, пользователи, настройки, история, топология, инциденты, аудит-лог) в одном JSON-файле. Секрет сессии в бэкап не входит — он привязан к конкретной инсталляции.</p>
+        <div class="modal-actions" style="justify-content:flex-start; gap:10px;">
+          <button type="button" class="btn-primary" id="backup-download-btn">⬇ Скачать бэкап</button>
+        </div>
+        <div id="backup-download-result" class="hint" style="margin:8px 0;"></div>
+        <div style="border-top:1px solid var(--border); margin:14px 0 10px 0; padding-top:12px;">
+          <label>Восстановить из файла бэкапа
+            <input type="file" id="backup-restore-file" accept=".json">
+          </label>
+          <div class="modal-actions" style="justify-content:flex-start; margin-top:10px;">
+            <button type="button" class="btn-secondary" id="backup-restore-btn">⬆ Восстановить</button>
+          </div>
+          <p class="hint" style="color:var(--red);">Внимание: восстановление полностью заменит текущие данные (устройства, пользователей, настройки и т.д.) содержимым файла. Действие необратимо — сначала скачайте текущий бэкап, если не уверены.</p>
+          <div id="backup-restore-result" class="hint" style="margin-top:8px;"></div>
+        </div>
+      </div>
+
+      <h2 class="admin-only">Импорт устройств из CSV</h2>
+      <div class="settings-panel admin-only" style="max-width:640px;">
+        <p class="hint">Формат: первая строка — заголовок с колонками <code>name,ip,mac,location,type,category,comment</code> (обязательны только <code>name</code> и <code>ip</code>). Категория — один из id: network, server, workstation, cctv, other.</p>
+        <textarea id="csv-input" rows="6" placeholder="name,ip,mac,location,type,category,comment&#10;Камера склад,10.7.6.20,AA:BB:CC:00:01:05,Склад,IP Camera,cctv," style="width:100%; font-family:monospace; font-size:12px;"></textarea>
+        <div class="modal-actions" style="justify-content:flex-start; margin-top:10px;">
+          <button type="button" class="btn-primary" id="csv-import-btn">Импортировать</button>
+        </div>
+        <div id="csv-import-result" class="hint" style="margin-top:8px;"></div>
+      </div>
+
+      <h2>Отчёты</h2>
+      <div class="settings-panel" style="max-width:520px;">
+        <p class="hint">Отчёт по аптайму всех устройств за 24ч/7д в формате CSV — открывается в Excel/Google Таблицах.</p>
+        <a class="btn-secondary" id="export-uptime-btn" href="/api/reports/uptime.csv" style="display:inline-block; text-decoration:none;">⬇ Скачать отчёт по аптайму (CSV)</a>
+      </div>
+
+      <h2>База производителей (OUI)</h2>
+      <div class="settings-panel" style="max-width:520px;">
+        <p class="hint">Определение производителя устройства по первым байтам MAC-адреса (реестр IEEE). Обновляется автоматически при запуске сервера, если данных ещё нет или они старше 30 дней.</p>
+        <p id="oui-status" class="hint" style="margin:10px 0;">Загрузка статуса...</p>
+        <button type="button" class="btn-secondary admin-only" id="oui-refresh-btn">Обновить сейчас</button>
+        <div id="oui-refresh-result" class="hint" style="margin-top:8px;"></div>
+      </div>
+      </div>
+
+      <!-- АУДИТ-ЛОГ -->
+      <div class="settings-subtab hidden" data-settings-panel="audit">
+      <h2 class="admin-only">Аудит-лог</h2>
+      <div class="settings-panel admin-only" style="max-width:760px;">
+        <p class="hint" id="audit-log-hint">Требует включения функции «Аудит-лог» в разделе «Функции».</p>
+        <table id="audit-log-table" class="hidden">
+          <thead><tr><th>Время</th><th>Пользователь</th><th>Действие</th><th>Детали</th></tr></thead>
+          <tbody id="audit-log-tbody"></tbody>
+        </table>
+      </div>
+      </div>
+
+      <!-- ПРОФИЛЬ -->
+      <div class="settings-subtab hidden" data-settings-panel="profile">
+      <h2>Смена пароля</h2>
+      <div class="settings-panel">
+        <form id="password-form">
+          <label>Текущий пароль<input type="password" id="p-current" required></label>
+          <label>Новый пароль (минимум 8 символов)<input type="password" id="p-new" required minlength="8"></label>
+          <div class="modal-actions" style="justify-content:flex-start;">
+            <button type="submit" class="btn-primary">Изменить пароль</button>
+          </div>
+          <div id="pw-result" class="hint" style="margin-top:8px;"></div>
+        </form>
+      </div>
+      </div>
+
+      <!-- О СИСТЕМЕ -->
+      <div class="settings-subtab hidden" data-settings-panel="about">
+      <h2>О системе</h2>
+      <div class="settings-panel" style="max-width:480px;">
+        <p class="hint">Версия: <b id="about-version">—</b> <span style="opacity:.7;">(beta — до переезда на SQLite и закрытия базовых доработок)</span></p>
+        <p class="hint">Исходники / автор: <a id="about-link" href="https://github.com/DarkyAndSparky" target="_blank" rel="noopener">github.com/DarkyAndSparky</a></p>
+      </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- Модалка добавления/редактирования устройства -->
+<div id="device-modal" class="modal-overlay hidden">
+  <div class="modal">
+    <h2 id="modal-title">Новое устройство</h2>
+    <form id="device-form">
+      <input type="hidden" id="f-id">
+      <label>Название<input type="text" id="f-name" required></label>
+      <label>IP-адрес<input type="text" id="f-ip" placeholder="192.168.1.10"></label>
+      <label>MAC-адрес<input type="text" id="f-mac" placeholder="AA:BB:CC:00:00:01"></label>
+      <div id="device-form-error" class="form-error hidden"></div>
+      <label>Расположение<input type="text" id="f-location" placeholder="Этаж 1, каб. 3"></label>
+      <label>Тип устройства
+        <select id="f-type-select">
+          <option value="Router">⇄ Роутер</option>
+          <option value="Switch">▤ Свитч</option>
+          <option value="Access Point">📶 Точка доступа</option>
+          <option value="Firewall">🛡 Файрвол</option>
+          <option value="Modem">📡 Модем</option>
+          <option value="IP Camera">◉ IP-камера</option>
+          <option value="NVR">⏺ NVR/видеорегистратор</option>
+          <option value="Server">▣ Сервер</option>
+          <option value="NAS">🗄 NAS/хранилище</option>
+          <option value="UPS">🔋 ИБП</option>
+          <option value="PC">🖥 Компьютер</option>
+          <option value="Laptop">💻 Ноутбук</option>
+          <option value="Printer">🖨 Принтер</option>
+          <option value="IP Phone">☎ IP-телефон</option>
+          <option value="TV">📺 ТВ-панель</option>
+          <option value="IoT Sensor">⚙ IoT-датчик</option>
+          <option value="DHCP Client">● DHCP-клиент</option>
+          <option value="__custom__">✎ Другое (указать вручную)</option>
+        </select>
+      </label>
+      <label id="f-type-custom-wrap" class="hidden">Свой вариант<input type="text" id="f-type-custom" placeholder="Например: Тонкий клиент"></label>
+      <label>Категория
+        <select id="f-category"></select>
+      </label>
+      <div id="f-snmp-wrap" class="hidden" style="border-top:1px solid var(--border); padding-top:10px;">
+        <label class="checkbox-label"><input type="checkbox" id="f-snmp-enabled"> Опрашивать по SNMP</label>
+        <label>SNMP community<input type="text" id="f-snmp-community" value="public"></label>
+        <label>SNMP порт<input type="text" id="f-snmp-port" value="161"></label>
+      </div>
+      <div id="f-ports-wrap" class="hidden" style="border-top:1px solid var(--border); padding-top:10px;">
+        <label>Проверять TCP-порты (через запятую, например 80,443,554)<input type="text" id="f-portchecks" placeholder="80,443,554"></label>
+      </div>
+      <label>Комментарий<textarea id="f-comment" rows="3"></textarea></label>
+      <label class="checkbox-label"><input type="checkbox" id="f-key"> Ключевое устройство (для дешборда)</label>
+      <label class="checkbox-label"><input type="checkbox" id="f-monitored" checked> Включить в мониторинг (пинговать)</label>
+      <label class="checkbox-label"><input type="checkbox" id="f-alerts" checked> Уведомления при недоступности (алерты)</label>
+      <label id="f-interval-wrap">Интервал проверки
+        <select id="f-interval">
+          <option value="15">15 секунд</option>
+          <option value="30">30 секунд</option>
+          <option value="60" selected>1 минута</option>
+          <option value="300">5 минут</option>
+          <option value="900">15 минут</option>
+        </select>
+      </label>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" id="cancel-btn">Отмена</button>
+        <button type="submit" class="btn-primary">Сохранить</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Toast-уведомления -->
+<div id="toast-container" role="region" aria-live="polite" aria-label="Уведомления"></div>
+
+<!-- Кастомный диалог подтверждения (замена confirm()) -->
+<div id="confirm-dialog-overlay" class="hidden" role="dialog" aria-modal="true" aria-labelledby="confirm-dialog-title">
+  <div id="confirm-dialog">
+    <h3 id="confirm-dialog-title">Подтвердите действие</h3>
+    <p id="confirm-dialog-text"></p>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="confirm-dialog-cancel">Отмена</button>
+      <button id="confirm-dialog-ok">Удалить</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
