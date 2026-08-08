@@ -1,32 +1,56 @@
 #!/usr/bin/env bash
-# Установка зависимостей NetMonitor (Linux/macOS)
 set -e
-cd "$(dirname "$0")"
-
-echo "=== NetMonitor: установка зависимостей ==="
-
-if ! command -v node &> /dev/null; then
-  echo "❌ Node.js не найден. Установите Node.js 18+: https://nodejs.org/"
-  exit 1
-fi
-
-NODE_MAJOR=$(node -v | sed 's/v//' | cut -d. -f1)
-if [ "$NODE_MAJOR" -lt 18 ]; then
-  echo "❌ Найден Node.js $(node -v), а нужен 18 или новее (используется встроенный fetch)."
-  echo "   Обновите Node.js: https://nodejs.org/"
-  exit 1
-fi
-
-if ! command -v npm &> /dev/null; then
-  echo "❌ npm не найден. Обычно ставится вместе с Node.js — переустановите Node.js."
-  exit 1
-fi
-
-echo "✔ Node.js $(node -v), npm $(npm -v)"
-echo "Устанавливаю зависимости (npm install)..."
-npm install
 
 echo ""
-echo "✅ Готово. Теперь можно запустить сервер:"
-echo "   ./start.sh      (Linux/macOS)"
-echo "   start.bat        (Windows)"
+echo "╔══════════════════════════════════════════╗"
+echo "║       net-monitor — Установка            ║"
+echo "╚══════════════════════════════════════════╝"
+echo ""
+
+# Проверяем Node.js
+if ! command -v node &>/dev/null; then
+    echo "[ОШИБКА] Node.js не найден."
+    echo "Установите через https://nodejs.org/ или:"
+    echo "  Ubuntu/Debian: curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - && sudo apt-get install -y nodejs"
+    exit 1
+fi
+echo "[OK] Node.js: $(node -v)"
+
+# npm install
+echo ""
+echo "[1/3] Устанавливаем зависимости npm..."
+npm install
+
+# Проверяем better-sqlite3
+echo ""
+echo "[2/3] Проверяем better-sqlite3..."
+if ! node -e "require('better-sqlite3')" &>/dev/null; then
+    echo "[!] better-sqlite3 требует компиляции..."
+    # Устанавливаем build tools если нужно
+    if command -v apt-get &>/dev/null; then
+        sudo apt-get install -y python3 make g++ 2>/dev/null || true
+    elif command -v yum &>/dev/null; then
+        sudo yum install -y python3 make gcc-c++ 2>/dev/null || true
+    elif command -v brew &>/dev/null; then
+        xcode-select --install 2>/dev/null || true
+    fi
+    npm rebuild better-sqlite3
+fi
+echo "[OK] better-sqlite3 готов."
+
+# Сертификат
+echo ""
+echo "[3/3] Проверяем TLS сертификат..."
+if [ ! -f "data/certs/cert.pem" ]; then
+    echo "[!] Сертификат не найден, генерируем..."
+    bash make-cert.sh
+else
+    echo "[OK] Сертификат уже есть."
+fi
+
+echo ""
+echo "╔══════════════════════════════════════════╗"
+echo "║   Установка завершена успешно!           ║"
+echo "║   Запустите: bash start.sh               ║"
+echo "╚══════════════════════════════════════════╝"
+echo ""

@@ -90,6 +90,7 @@ async function loadAll() {
     loadSettings();
     refreshStatus();
     refreshUptime();
+    connectSSE();  // SSE: подписываемся на живые обновления
   } catch (e) { /* сессия истекла — уже показали логин */ }
 }
 
@@ -114,7 +115,105 @@ async function refreshStatus() {
   renderMap();
   renderMonitoring();
 }
-setInterval(refreshStatus, 15000);
+
+// ── SSE: живые обновления статусов без перезагрузки ─────────────────
+// Подключаемся один раз после логина. При разрыве — переподключаемся
+// через 5 сек. В качестве fallback оставляем polling раз в 60 сек.
+
+let _sseSource = null;
+let _sseReconnectTimer = null;
+
+function connectSSE() {
+  if (_sseSource) { _sseSource.close(); _sseSource = null; }
+  clearTimeout(_sseReconnectTimer);
+
+  const es = new EventSource('/api/events');
+  _sseSource = es;
+
+  // snapshot — полный статус при первом подключении
+  es.addEventListener('snapshot', e => {
+    try {
+      const list = JSON.parse(e.data);
+      list.forEach(s => { STATUS[s.id] = { ...STATUS[s.id], ...s }; });
+      renderDashboard();
+      renderDevicesStatusOnly();
+      renderMap();
+      renderMonitoring();
+    } catch {}
+  });
+
+  // status — смена статуса одного устройства
+  es.addEventListener('status', e => {
+    try {
+      const s = JSON.parse(e.data);
+      STATUS[s.id] = { ...STATUS[s.id], ...s, monitored: true };
+
+      // Обновляем только нужный узел на карте — без полной перерисовки
+      updateMapNode(s.id);
+
+      // Счётчики дашборда и строки таблиц
+      renderDashboard();
+      renderDevicesStatusOnly();
+      renderMonitoringRow(s.id);
+    } catch {}
+  });
+
+  // incident — новый инцидент (если включён модуль)
+  es.addEventListener('incident', e => {
+    try {
+      const ev = JSON.parse(e.data);
+      if (ev.type === 'open') toast(`🔴 Инцидент: ${ev.deviceName} недоступно`, 'error', 6000);
+      if (ev.type === 'close') toast(`🟢 Восстановлено: ${ev.deviceName}`, 'success', 4000);
+    } catch {}
+  });
+
+  es.onerror = () => {
+    es.close(); _sseSource = null;
+    _sseReconnectTimer = setTimeout(connectSSE, 5000);
+  };
+}
+
+// Обновление одного узла на SVG-карте без перерисовки всего
+function updateMapNode(deviceId) {
+  const svg = document.getElementById('network-svg');
+  if (!svg) return;
+  const node = svg.querySelector(`.map-node[data-id="${deviceId}"]`);
+  if (!node) return;
+
+  const d = DEVICES.find(x => x.id === deviceId);
+  if (!d) return;
+  const s = STATUS[deviceId];
+  if (!s) return;
+
+  let ringColor = '#4b5568';
+  if (d.monitored && s) {
+    ringColor = s.online === true ? '#22c55e' : s.online === false ? '#ef4444' : '#4b5568';
+  }
+
+  const circle = node.querySelector('circle[r="16"]');
+  if (circle) {
+    circle.setAttribute('stroke', ringColor);
+  }
+}
+
+// Обновление одной строки в таблице мониторинга
+function renderMonitoringRow(deviceId) {
+  const row = document.querySelector(`#monitoring-table tr[data-id="${deviceId}"]`);
+  if (!row) return;
+  const s = STATUS[deviceId];
+  if (!s) return;
+  const statusCell = row.querySelector('.status-cell');
+  if (!statusCell) return;
+  const online = s.online;
+  statusCell.innerHTML = online === true
+    ? '<span class="status-badge status-online">Online</span>'
+    : online === false
+      ? '<span class="status-badge status-offline">Offline</span>'
+      : '<span class="status-badge status-unknown">—</span>';
+}
+
+// Fallback polling — на случай если SSE не поддерживается или отвалился надолго
+setInterval(refreshStatus, 60000);  // было 15000, теперь 60000 — SSE делает основную работу
 
 // ---------------- UPTIME / ИСТОРИЯ ----------------
 async function refreshUptime() {

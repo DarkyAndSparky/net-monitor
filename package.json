@@ -1,15 +1,12 @@
 {
-  "name": "network-monitor",
+  "name": "net-monitor",
   "version": "0.9.0-beta",
-  "description": "Мини веб-сайт: карта сети, дешборд мониторинга, реестр устройств (для локальной сети / MikroTik)",
+  "description": "Self-hosted network monitoring dashboard — devices, map, ping, SNMP, MikroTik, alerts",
   "main": "server.js",
-  "engines": {
-    "node": ">=18.0.0"
-  },
-  "scripts": {
-    "start": "node server.js"
-  },
+  "engines": { "node": ">=18.0.0" },
+  "scripts": { "start": "node server.js" },
   "dependencies": {
+    "better-sqlite3": "^9.4.3",
     "express": "^4.19.2",
     "express-session": "^1.18.0",
     "node-routeros": "^1.6.9",

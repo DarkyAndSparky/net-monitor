@@ -1,0 +1,27 @@
+services:
+  net-monitor:
+    build: .
+    container_name: net-monitor
+    restart: unless-stopped
+    ports:
+      - "9222:9222"
+    volumes:
+      # Все данные хранятся здесь: БД, сертификаты, логи
+      - ./data:/app/data
+    environment:
+      - PORT=9222
+      # Раскомментируй если используешь свои сертификаты:
+      # - TLS_CERT_FILE=/app/data/certs/cert.pem
+      # - TLS_KEY_FILE=/app/data/certs/key.pem
+    network_mode: host
+    # network_mode: host — нужен для ping внутри локальной сети.
+    # Если не нужен ping или используешь macvlan — замени на:
+    # networks:
+    #   - monitoring
+    cap_add:
+      - NET_RAW    # разрешает ping
+      - NET_ADMIN  # разрешает ARP-сканирование
+
+# networks:
+#   monitoring:
+#     driver: bridge
