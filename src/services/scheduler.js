@@ -1,4 +1,5 @@
 'use strict';
+const logger = require('./logger');
 const { execFile } = require('child_process');
 const net          = require('net');
 const os           = require('os');
@@ -54,7 +55,7 @@ async function checkDevicePorts(device) {
 let snmpLib = null; try { snmpLib = require('net-snmp'); } catch {}
 
 function pollSnmp(device) {
-  if (!snmpLib) { snmpCache[device.id]={ error:'net-snmp не установлен', lastChecked:Date.now() }; return Promise.resolve(); }
+  if (!snmpLib) { logger.warn('net-snmp не установлен, SNMP опрос недоступен'); snmpCache[device.id]={ error:'net-snmp не установлен', lastChecked:Date.now() }; return Promise.resolve(); }
   return new Promise(resolve => {
     const session = snmpLib.createSession(device.ip, device.snmp_community||'public', { port:device.snmp_port||161, timeout:2000, retries:0 });
     session.get(['1.3.6.1.2.1.1.3.0','1.3.6.1.4.1.14988.1.1.3.14.0'], (err, vb) => {
@@ -69,11 +70,11 @@ function pollSnmp(device) {
 // ── Алерты ───────────────────────────────────────────────────────────
 async function sendTelegram(cfg, text) {
   if (!cfg.telegram?.enabled||!cfg.telegram.botToken||!cfg.telegram.chatId) return;
-  try { await fetch(`https://api.telegram.org/bot${cfg.telegram.botToken}/sendMessage`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:cfg.telegram.chatId,text,parse_mode:'HTML'})}); } catch(e){console.error('Telegram:',e.message);}
+  try { await fetch(`https://api.telegram.org/bot${cfg.telegram.botToken}/sendMessage`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:cfg.telegram.chatId,text,parse_mode:'HTML'})}); } catch(e){ logger.error({ err: e }, 'Telegram alert failed'); }
 }
 async function sendWebhook(cfg, payload) {
   if (!cfg.webhook?.enabled||!cfg.webhook.url) return;
-  try { await fetch(cfg.webhook.url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); } catch(e){console.error('Webhook:',e.message);}
+  try { await fetch(cfg.webhook.url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); } catch(e){ logger.error({ err: e }, 'Webhook alert failed'); }
 }
 async function dispatchAlert(cfg, device, status, text) {
   await Promise.all([

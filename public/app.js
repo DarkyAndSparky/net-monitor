@@ -2214,3 +2214,110 @@ document.getElementById('logo-reset-btn').addEventListener('click', async () => 
 });
 
 checkAuth();
+
+// ══════════════════════════════════════════════════════════════════
+//  ЛОГИ — просмотр системных логов в настройках
+// ══════════════════════════════════════════════════════════════════
+
+const LEVEL_COLORS = {
+  ERROR: '#ef4444', WARN: '#f59e0b', INFO: '#22c55e',
+  DEBUG: '#3b82f6', TRACE: '#8b95ab', FATAL: '#ef4444', RAW: '#8b95ab'
+};
+
+async function initLogsTab() {
+  // Загружаем список файлов логов в select
+  try {
+    const data = await api('/api/logs/files').then(r => r.json());
+    const sel = document.getElementById('logs-date-select');
+    sel.innerHTML = '<option value="">Сегодня</option>';
+    (data.files || []).forEach(f => {
+      const opt = document.createElement('option');
+      opt.value = f.date;
+      const kb = (f.sizeBytes / 1024).toFixed(1);
+      opt.textContent = `${f.date} (${kb} KB)`;
+      sel.appendChild(opt);
+    });
+  } catch {}
+}
+
+async function loadLogs() {
+  const date    = document.getElementById('logs-date-select').value;
+  const level   = document.getElementById('logs-level-select').value;
+  const lines   = document.getElementById('logs-lines-select').value;
+  const container = document.getElementById('logs-container');
+  const stats   = document.getElementById('logs-stats');
+  const delBtn  = document.getElementById('logs-delete-btn');
+
+  container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-dim);">Загрузка...</div>';
+
+  try {
+    const url = date
+      ? `/api/logs/file/${date}?lines=${lines}${level ? '&level=' + level : ''}`
+      : `/api/logs?lines=${lines}${level ? '&level=' + level : ''}`;
+
+    const data = await api(url).then(r => r.json());
+
+    stats.textContent = `Дата: ${data.date} · Строк: ${data.count}`;
+    delBtn.style.display = date ? '' : 'none';
+    delBtn.dataset.date = date || data.date;
+
+    if (!data.lines || !data.lines.length) {
+      container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-dim);">Нет записей</div>';
+      return;
+    }
+
+    // Рендерим строки снизу вверх (новые снизу)
+    container.innerHTML = data.lines.map(line => {
+      const ts   = line.ts ? new Date(line.ts).toLocaleTimeString('ru-RU') : '—';
+      const lvl  = line.level || 'RAW';
+      const msg  = line.msg || '';
+      const color = LEVEL_COLORS[lvl] || '#8b95ab';
+
+      // Дополнительные поля (всё кроме ts, level, msg)
+      const extra = Object.entries(line)
+        .filter(([k]) => !['ts','level','msg'].includes(k))
+        .map(([k,v]) => `<span style="opacity:.6;">${k}=</span>${typeof v==='object'?JSON.stringify(v):v}`)
+        .join(' ');
+
+      return `<div style="display:flex;gap:8px;padding:3px 10px;border-bottom:1px solid var(--border);font-size:11.5px;line-height:1.6;" onmouseover="this.style.background='var(--panel)'" onmouseout="this.style.background=''">
+        <span style="color:var(--text-dim);flex-shrink:0;width:60px;">${ts}</span>
+        <span style="color:${color};flex-shrink:0;width:48px;font-weight:600;">${lvl}</span>
+        <span style="flex:1;word-break:break-all;">${msg}${extra ? ' <span style="opacity:.5;font-size:10.5px;">' + extra + '</span>' : ''}</span>
+      </div>`;
+    }).join('');
+
+    // Скроллим вниз (новые записи внизу)
+    container.scrollTop = container.scrollHeight;
+
+  } catch(e) {
+    container.innerHTML = `<div style="padding:24px;text-align:center;color:var(--red);">Ошибка: ${e.message}</div>`;
+  }
+}
+
+async function deleteLogFile() {
+  const btn = document.getElementById('logs-delete-btn');
+  const date = btn.dataset.date;
+  if (!date) return;
+  const ok = await showConfirm(`Удалить лог за ${date}?`, 'Файл будет удалён безвозвратно.');
+  if (!ok) return;
+  try {
+    await api(`/api/logs/file/${date}`, { method: 'DELETE' });
+    toast(`Лог за ${date} удалён`, 'success');
+    await initLogsTab();
+    document.getElementById('logs-date-select').value = '';
+    await loadLogs();
+  } catch(e) {
+    toast('Ошибка удаления: ' + e.message, 'error');
+  }
+}
+
+// Инициализация при открытии вкладки настроек
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.settings-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.settingsTab === 'logs') {
+        initLogsTab();
+      }
+    });
+  });
+});

@@ -152,7 +152,8 @@ function verifyPassword(password, salt, hash) {
 if (!db.prepare('SELECT 1 FROM users LIMIT 1').get()) {
   const { salt, hash } = hashPassword('admin');
   db.prepare('INSERT INTO users (username,salt,hash,role) VALUES (?,?,?,?)').run('admin', salt, hash, 'admin');
-  console.log('>>> Создан пользователь по умолчанию: admin / admin — ОБЯЗАТЕЛЬНО смените пароль <<<');
+  // Используем process.stdout напрямую — логгер ещё не инициализирован на этом этапе
+  process.stdout.write('[WARN] Создан пользователь по умолчанию: admin / admin — ОБЯЗАТЕЛЬНО смените пароль!\n');
 }
 
 // ── Утилиты ───────────────────────────────────────────────────────────
