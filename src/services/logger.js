@@ -1,16 +1,17 @@
 'use strict';
 
 /**
- * src/services/logger.js — структурированные логи через pino
+ * src/services/logger.js — Структурированные логи через pino
  *
  * Использование:
  *   const log = require('../services/logger');
  *   log.info('Сервер запущен');
- *   log.warn({ deviceId: 'd-...' }, 'Устройство недоступно');
- *   log.error({ err }, 'Ошибка подключения к MikroTik');
+ *   log.warn({ port: 9222 }, 'Порт занят');
+ *   log.error({ err }, 'Ошибка подключения');
  *
- * Файлы: data/logs/app.log (текущий), app.log.1..5 (архив)
- * Ротация: 10MB или ежесуточно, хранится 5 файлов
+ * Уровни (LOG_LEVEL): trace | debug | info (default) | warn | error | fatal
+ * Формат: в production — JSON, в dev — pino-pretty (если установлен)
+ * Файл: data/logs/app.log (ротация раз в сутки, хранится 7 дней)
  */
 
 const path = require('path');
@@ -18,77 +19,93 @@ const fs   = require('fs');
 
 const DATA_DIR = path.join(__dirname, '../../data');
 const LOG_DIR  = path.join(DATA_DIR, 'logs');
-const LOG_FILE = path.join(LOG_DIR, 'app.log');
-const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
-
 if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
 
-// ── Fallback если pino не установлен ─────────────────────────────────
-function makeFallback() {
-  const fmt = (level, obj, msg) => {
-    const ts  = new Date().toISOString();
-    const line = JSON.stringify({ time: ts, level, msg: msg || obj, ...(typeof obj === 'object' && msg ? obj : {}) });
-    fs.appendFileSync(LOG_FILE, line + '\n');
-    if (level === 'error' || level === 'fatal') console.error(`[${level.toUpperCase()}]`, msg || obj);
-    else if (level === 'warn')  console.warn(`[WARN]`, msg || obj);
-    else if (level !== 'debug') console.log(`[${level.toUpperCase()}]`, msg || obj);
-  };
-  const make = (level) => (obj, msg) => fmt(level, obj, msg);
-  return { info: make('info'), warn: make('warn'), error: make('error'), debug: make('debug'), fatal: make('fatal'), child: () => module.exports };
-}
+const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
+const IS_PROD   = process.env.NODE_ENV === 'production';
 
-let pino, pinoRoll;
-try { pino = require('pino'); }     catch { module.exports = makeFallback(); return; }
-try { pinoRoll = require('pino-roll'); } catch { pinoRoll = null; }
-
-// ── Destination ───────────────────────────────────────────────────────
-let dest;
-try {
-  if (pinoRoll) {
-    dest = pinoRoll.createWriteStream({
-      file: LOG_FILE, size: '10m', frequency: 'daily',
-      limit: { count: 5 }, mkdir: true,
+// Fallback если pino не установлен
+let pino;
+try { pino = require('pino'); } catch {
+  const noop = () => {};
+  const lvls = ['trace','debug','info','warn','error','fatal'];
+  const cur  = lvls.indexOf(LOG_LEVEL);
+  const makeLogger = () => {
+    const l = {};
+    lvls.forEach((lv, i) => {
+      const fn = lv === 'trace' || lv === 'debug' ? console.debug
+               : lv === 'info'  ? console.log
+               : lv === 'warn'  ? console.warn : console.error;
+      l[lv] = i >= cur ? fn.bind(console) : noop;
     });
-  } else {
-    dest = fs.createWriteStream(LOG_FILE, { flags: 'a' });
-  }
-} catch {
-  dest = fs.createWriteStream(LOG_FILE, { flags: 'a' });
-}
-
-// ── Logger ────────────────────────────────────────────────────────────
-const isDev = process.env.NODE_ENV !== 'production';
-let logger;
-
-try {
-  if (isDev) {
-    // Dev: консоль (pretty) + файл
-    let prettyTransport;
-    try {
-      prettyTransport = pino.transport({
-        target: 'pino-pretty',
-        options: { colorize: true, translateTime: 'HH:MM:ss', ignore: 'pid,hostname' }
-      });
-    } catch { prettyTransport = null; }
-
-    if (prettyTransport) {
-      logger = pino(
-        { level: LOG_LEVEL, base: null },
-        pino.multistream([
-          { level: LOG_LEVEL, stream: prettyTransport },
-          { level: LOG_LEVEL, stream: dest },
-        ])
-      );
-    } else {
-      logger = pino({ level: LOG_LEVEL, base: null, timestamp: pino.stdTimeFunctions.isoTime }, dest);
-    }
-  } else {
-    // Prod: только файл, максимальная скорость
-    logger = pino({ level: LOG_LEVEL, base: null, timestamp: pino.stdTimeFunctions.isoTime }, dest);
-  }
-} catch {
-  module.exports = makeFallback();
+    l.child = () => makeLogger();
+    l.httpLogger = (req, res, next) => next();
+    return l;
+  };
+  console.warn('[logger] pino не установлен → console.*. Запустите: npm install pino pino-roll pino-pretty');
+  module.exports = makeLogger();
   return;
 }
+
+// Транспорты
+const targets = [];
+
+// Файловый лог
+try {
+  require.resolve('pino-roll');
+  targets.push({
+    target: 'pino-roll',
+    level: LOG_LEVEL,
+    options: {
+      file: path.join(LOG_DIR, 'app.log'),
+      frequency: 'daily',
+      limit: { count: 7 },
+      mkdir: true,
+    },
+  });
+} catch {
+  targets.push({
+    target: 'pino/file',
+    level: LOG_LEVEL,
+    options: { destination: path.join(LOG_DIR, 'app.log'), mkdir: true },
+  });
+}
+
+// Консоль
+if (!IS_PROD) {
+  try {
+    require.resolve('pino-pretty');
+    targets.push({
+      target: 'pino-pretty',
+      level: LOG_LEVEL,
+      options: { colorize: true, translateTime: 'SYS:HH:MM:ss', ignore: 'pid,hostname' },
+    });
+  } catch {
+    targets.push({ target: 'pino/file', level: LOG_LEVEL, options: { destination: 1 } });
+  }
+} else {
+  targets.push({ target: 'pino/file', level: LOG_LEVEL, options: { destination: 1 } });
+}
+
+const logger = pino(
+  {
+    level: LOG_LEVEL,
+    base: { pid: process.pid },
+    timestamp: pino.stdTimeFunctions.isoTime,
+    serializers: { err: pino.stdSerializers.err, error: pino.stdSerializers.err },
+  },
+  pino.transport({ targets })
+);
+
+// HTTP access log middleware
+logger.httpLogger = (req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const ms  = Date.now() - start;
+    const lvl = res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'debug';
+    logger[lvl]({ method: req.method, url: req.url, status: res.statusCode, ms }, 'HTTP');
+  });
+  next();
+};
 
 module.exports = logger;

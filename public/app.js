@@ -1690,11 +1690,43 @@ document.getElementById('oui-refresh-btn').addEventListener('click', async () =>
 });
 
 async function loadAboutPanel() {
-  const v = document.getElementById('app-version').textContent; // уже заполнено при загрузке страницы
-  if (v) { document.getElementById('about-version').textContent = v; return; }
   try {
-    const h = await fetch('/api/health').then(r => r.json());
-    document.getElementById('about-version').textContent = 'v' + (h.version || '?');
+    const h = await api('/api/health').then(r => r.json());
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+
+    // Шапка
+    const ver = h.version || '?';
+    set('about-version', ver);
+    set('about-node',    'Node.js ' + (h.nodeVersion || '—'));
+    set('ai-version',    ver);
+    set('ai-node',       h.nodeVersion || '—');
+
+    // Аптайм
+    const sec = h.uptimeSec || 0;
+    const dd  = Math.floor(sec / 86400);
+    const hh  = Math.floor((sec % 86400) / 3600);
+    const mm  = Math.floor((sec % 3600) / 60);
+    const ss  = sec % 60;
+    const pad = n => String(n).padStart(2,'0');
+    set('ai-uptime', (dd > 0 ? dd + 'д ' : '') + pad(hh) + ':' + pad(mm) + ':' + pad(ss));
+
+    // Время сервера
+    if (h.time) set('ai-time', new Date(h.time).toLocaleString('ru-RU'));
+
+    // Версии зависимостей из node_modules (приходят в h.deps)
+    if (h.deps && typeof h.deps === 'object') {
+      document.querySelectorAll('.about-dep-card').forEach(card => {
+        const nameEl = card.querySelector('.dep-name');
+        const verEl  = card.querySelector('.dep-ver');
+        if (!nameEl || !verEl) return;
+        const name = nameEl.textContent.trim();
+        if (h.deps[name] && h.deps[name] !== '—') {
+          verEl.textContent = h.deps[name];
+          verEl.style.color = 'var(--green)';
+        }
+      });
+    }
+
   } catch (e) { /* ignore */ }
 }
 
@@ -2321,3 +2353,187 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 });
+
+
+/* ══════════════════════════════════════════════════════════
+   ВКЛАДКИ ФОРМЫ УСТРОЙСТВА
+══════════════════════════════════════════════════════════ */
+
+// Инициализация вкладок при клике
+document.addEventListener('click', e => {
+  const tab = e.target.closest('.form-tab');
+  if (!tab) return;
+  const container = tab.closest('.modal');
+  if (!container) return;
+  // Переключаем кнопки
+  container.querySelectorAll('.form-tab').forEach(t => t.classList.remove('active'));
+  tab.classList.add('active');
+  // Переключаем панели
+  const targetId = tab.dataset.tab;
+  container.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+  const panel = container.querySelector('#' + targetId);
+  if (panel) panel.classList.remove('hidden');
+});
+
+// При открытии формы — сбрасываем на первую вкладку
+const _origOpenDeviceModal = window.openDeviceModal;
+function resetFormTabs() {
+  const modal = document.getElementById('device-modal');
+  if (!modal) return;
+  modal.querySelectorAll('.form-tab').forEach((t, i) => t.classList.toggle('active', i === 0));
+  modal.querySelectorAll('.tab-panel').forEach((p, i) => p.classList.toggle('hidden', i !== 0));
+}
+
+/* ══════════════════════════════════════════════════════════
+   MAINTENANCE WINDOWS
+══════════════════════════════════════════════════════════ */
+
+let MAINTENANCE = [];
+
+async function loadMaintenance() {
+  try {
+    MAINTENANCE = await api('/api/maintenance').then(r => r.json());
+  } catch { MAINTENANCE = []; }
+  renderMaintenance();
+}
+
+function renderMaintenance() {
+  const container = document.getElementById('mw-list');
+  if (!container) return;
+  const now = Date.now();
+
+  if (!MAINTENANCE.length) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <i class="ti ti-calendar-off"></i>
+        <h3>Нет окон обслуживания</h3>
+        <p>Создайте окно обслуживания чтобы временно приостановить алерты для устройств во время плановых работ.</p>
+      </div>`;
+    return;
+  }
+
+  // Сортируем: активные → будущие → завершённые
+  const sorted = [...MAINTENANCE].sort((a, b) => {
+    const aActive = a.startTs <= now && a.endTs > now;
+    const bActive = b.startTs <= now && b.endTs > now;
+    if (aActive !== bActive) return aActive ? -1 : 1;
+    return b.startTs - a.startTs;
+  });
+
+  container.innerHTML = sorted.map(w => {
+    const isActive  = w.startTs <= now && w.endTs > now;
+    const isPending = w.startTs > now;
+    const isExpired = w.endTs <= now;
+    const badge = isActive  ? '<span class="mw-badge active">Активно сейчас</span>'
+                : isPending ? '<span class="mw-badge pending">Запланировано</span>'
+                :             '<span class="mw-badge expired">Завершено</span>';
+    const devText = w.allDevices ? 'Все устройства' : `${w.deviceIds.length} устр.`;
+    const start = new Date(w.startTs).toLocaleString('ru-RU', {day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
+    const end   = new Date(w.endTs).toLocaleString('ru-RU',   {day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
+    return `<div class="mw-card${isActive ? ' active-now' : ''}">
+      ${badge}
+      <div class="mw-info">
+        <div class="mw-name">${esc(w.name)}</div>
+        <div class="mw-time">${start} — ${end}</div>
+        <div class="mw-devices">${devText}${w.note ? ' · ' + esc(w.note) : ''}</div>
+      </div>
+      ${CURRENT_ROLE !== 'viewer' ? `<button class="btn-secondary" onclick="deleteMaintenance('${w.id}')">
+        <i class="ti ti-trash"></i>
+      </button>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function deleteMaintenance(id) {
+  const ok = await showConfirm('Удалить окно обслуживания?', 'Алерты для устройств возобновятся немедленно.');
+  if (!ok) return;
+  try {
+    await api(`/api/maintenance/${id}`, { method: 'DELETE' });
+    MAINTENANCE = MAINTENANCE.filter(w => w.id !== id);
+    renderMaintenance();
+    toast('Окно обслуживания удалено', 'success');
+  } catch { toast('Ошибка удаления', 'error'); }
+}
+
+// Открытие модалки создания окна
+document.addEventListener('DOMContentLoaded', () => {
+  // Кнопка добавить
+  document.addEventListener('click', e => {
+    if (e.target.closest('#add-mw-btn')) {
+      // Заполняем список устройств
+      const sel = document.getElementById('mw-devices');
+      if (sel) {
+        sel.innerHTML = DEVICES.sort((a,b)=>a.name.localeCompare(b.name))
+          .map(d => `<option value="${d.id}">${esc(d.name)} (${d.ip || '—'})</option>`).join('');
+      }
+      // Дефолтное время: сейчас + 10 мин → через 2 часа
+      const pad = n => String(n).padStart(2,'0');
+      const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      const start = new Date(Date.now() + 10 * 60000);
+      const end   = new Date(Date.now() + 2  * 3600000);
+      const startEl = document.getElementById('mw-start');
+      const endEl   = document.getElementById('mw-end');
+      if (startEl) startEl.value = fmt(start);
+      if (endEl)   endEl.value   = fmt(end);
+      document.getElementById('mw-modal').classList.remove('hidden');
+    }
+  });
+
+  // Показать/скрыть список устройств при "все устройства"
+  const mwAll = document.getElementById('mw-all');
+  if (mwAll) {
+    mwAll.addEventListener('change', () => {
+      const wrap = document.getElementById('mw-devices-wrap');
+      if (wrap) wrap.classList.toggle('hidden', mwAll.checked);
+    });
+  }
+
+  // Форма создания maintenance window
+  const mwForm = document.getElementById('mw-form');
+  if (mwForm) {
+    mwForm.addEventListener('submit', async e => {
+      e.preventDefault();
+      const allDevices = document.getElementById('mw-all')?.checked;
+      const sel = document.getElementById('mw-devices');
+      const deviceIds = allDevices ? [] : [...(sel?.selectedOptions || [])].map(o => o.value);
+      const startVal = document.getElementById('mw-start')?.value;
+      const endVal   = document.getElementById('mw-end')?.value;
+
+      if (!startVal || !endVal) return toast('Укажите начало и конец', 'warning');
+      const startTs = new Date(startVal).getTime();
+      const endTs   = new Date(endVal).getTime();
+      if (endTs <= startTs) return toast('Конец должен быть позже начала', 'warning');
+      if (!allDevices && !deviceIds.length) return toast('Выберите устройства', 'warning');
+
+      try {
+        const w = await api('/api/maintenance', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: document.getElementById('mw-name')?.value || 'Плановые работы',
+            allDevices, deviceIds, startTs, endTs,
+            note: document.getElementById('mw-note')?.value || '',
+          }),
+        }).then(r => r.json());
+        MAINTENANCE.push(w);
+        renderMaintenance();
+        document.getElementById('mw-modal').classList.add('hidden');
+        toast('Окно обслуживания создано', 'success');
+      } catch { toast('Ошибка создания', 'error'); }
+    });
+  }
+});
+
+// Загружаем maintenance при переходе на вкладку
+const _origShowTab = window.showTab;
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.nav-btn');
+  if (btn && btn.dataset.tab === 'maintenance') {
+    loadMaintenance();
+  }
+});
+
+// Хелпер esc для XSS-защиты (если ещё не определён)
+if (typeof esc === 'undefined') {
+  window.esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}

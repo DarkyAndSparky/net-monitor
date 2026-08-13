@@ -1,16 +1,43 @@
 'use strict';
 
-const Database = require('better-sqlite3');
-const path     = require('path');
-const fs       = require('fs');
-const crypto   = require('crypto');
+/**
+ * src/db/index.js
+ * Использует встроенный node:sqlite (Node.js >= 22.5.0, стабилен в v26+)
+ * Никаких нативных зависимостей — не нужны Python, Build Tools, node-gyp.
+ */
+
+const { DatabaseSync } = require('node:sqlite');
+const path   = require('path');
+const fs     = require('fs');
+const crypto = require('crypto');
 
 const DATA_DIR = path.join(__dirname, '../../data');
 const DB_PATH  = path.join(DATA_DIR, 'netmonitor.db');
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
-const db = new Database(DB_PATH);
+const db = new DatabaseSync(DB_PATH);
+
+// Эмулируем .pragma() через exec
+db.pragma = (str) => db.exec(`PRAGMA ${str}`);
+
+// node:sqlite не имеет .transaction() — создаём совместимый враппер
+// Поведение: BEGIN → fn() → COMMIT, при ошибке → ROLLBACK
+db.transaction = (fn) => {
+  return (...args) => {
+    db.exec('BEGIN');
+    try {
+      const result = fn(...args);
+      db.exec('COMMIT');
+      return result;
+    } catch (err) {
+      try { db.exec('ROLLBACK'); } catch {}
+      throw err;
+    }
+  };
+};
+
+// Инициализация
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
@@ -97,6 +124,19 @@ db.exec(`
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS maintenance_windows (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL DEFAULT 'Плановые работы',
+    device_ids  TEXT NOT NULL DEFAULT '[]',
+    all_devices INTEGER NOT NULL DEFAULT 0,
+    start_ts    INTEGER NOT NULL,
+    end_ts      INTEGER NOT NULL,
+    created_by  TEXT NOT NULL DEFAULT '',
+    created_at  INTEGER NOT NULL DEFAULT (unixepoch('now') * 1000),
+    note        TEXT NOT NULL DEFAULT ''
+  );
+  CREATE INDEX IF NOT EXISTS idx_mw_end ON maintenance_windows(end_ts);
 `);
 
 // ── Дефолтные категории ───────────────────────────────────────────────
@@ -127,7 +167,7 @@ const DEF_SETTINGS = {
   alerting: {
     enabled: false, failThreshold: 2, repeatMinutes: 30, notifyOnRecovery: true,
     telegram: { enabled: false, botToken: '', chatId: '' },
-    webhook: { enabled: false, url: '' },
+    webhook:  { enabled: false, url: '' },
     escalation: { enabled: false, afterMinutes: 60, telegramChatId: '' }
   },
   features: { snmp: false, portChecks: false, incidents: false, auditLog: false },
@@ -135,11 +175,9 @@ const DEF_SETTINGS = {
 };
 Object.entries(DEF_SETTINGS).forEach(([k, v]) => { if (getSetting(k) === null) setSetting(k, v); });
 
-function getFeatures() {
-  return getSetting('features') || DEF_SETTINGS.features;
-}
+function getFeatures() { return getSetting('features') || DEF_SETTINGS.features; }
 
-// ── Дефолтный пользователь ────────────────────────────────────────────
+// ── Пользователи ──────────────────────────────────────────────────────
 function hashPassword(password, salt) {
   salt = salt || crypto.randomBytes(16).toString('hex');
   const hash = crypto.scryptSync(password, salt, 64).toString('hex');
@@ -152,7 +190,6 @@ function verifyPassword(password, salt, hash) {
 if (!db.prepare('SELECT 1 FROM users LIMIT 1').get()) {
   const { salt, hash } = hashPassword('admin');
   db.prepare('INSERT INTO users (username,salt,hash,role) VALUES (?,?,?,?)').run('admin', salt, hash, 'admin');
-  // Используем process.stdout напрямую — логгер ещё не инициализирован на этом этапе
   process.stdout.write('[WARN] Создан пользователь по умолчанию: admin / admin — ОБЯЗАТЕЛЬНО смените пароль!\n');
 }
 
@@ -170,7 +207,6 @@ function csvCell(v) {
   return `"${s.replace(/"/g, '""')}"`;
 }
 
-// ── Преобразование строки БД в объект устройства ──────────────────────
 function deviceRow(r) {
   if (!r) return null;
   return {

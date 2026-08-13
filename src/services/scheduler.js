@@ -1,5 +1,5 @@
 'use strict';
-const logger = require('./logger');
+const log          = require('./logger');
 const { execFile } = require('child_process');
 const net          = require('net');
 const os           = require('os');
@@ -85,6 +85,15 @@ async function dispatchAlert(cfg, device, status, text) {
 async function evaluateAlert(device, online) {
   const cfg = getSetting('alerting')||{};
   if (!cfg.enabled||!device.alerts_enabled) return;
+
+  // Проверяем maintenance window — не отправляем алерты в окне обслуживания
+  try {
+    const { isInMaintenance } = require('../routes/maintenance');
+    if (isInMaintenance(device.id)) {
+      log.debug({ deviceId: device.id, name: device.name }, 'Алерт подавлен (maintenance window)');
+      return;
+    }
+  } catch {}
   const threshold=Math.max(1,Number(cfg.failThreshold)||2);
   const repeatMs=Math.max(0,Number(cfg.repeatMinutes)||0)*60000;
   const now=Date.now();

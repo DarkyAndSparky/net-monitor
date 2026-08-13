@@ -3,1187 +3,807 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>net-monitor · Docs</title>
-<style>
-  :root {
-    --bg: #0f1117;
-    --surface: #161b27;
-    --surface2: #1e2535;
-    --border: #2a3347;
-    --accent: #3b82f6;
-    --accent2: #7c4dff;
-    --green: #22c55e;
-    --yellow: #f59e0b;
-    --red: #ef4444;
-    --orange: #f97316;
-    --text: #e2e8f0;
-    --muted: #64748b;
-    --code-bg: #0d1117;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; font-size: 14px; line-height: 1.6; display: flex; min-height: 100vh; }
-  .sidebar { width: 260px; min-height: 100vh; background: var(--surface); border-right: 1px solid var(--border); position: fixed; top: 0; left: 0; overflow-y: auto; display: flex; flex-direction: column; z-index: 100; }
-  .sidebar-logo { padding: 20px 20px 16px; border-bottom: 1px solid var(--border); }
-  .sidebar-logo .project { font-size: 16px; font-weight: 700; color: var(--text); }
-  .sidebar-logo .version { font-size: 11px; color: var(--accent); background: rgba(59,130,246,.12); padding: 2px 7px; border-radius: 10px; display: inline-block; margin-top: 4px; }
-  .sidebar-logo .badge { font-size: 10px; color: var(--muted); margin-top: 4px; display: block; }
-  .nav-section { padding: 12px 0 4px; }
-  .nav-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding: 0 20px 6px; }
-  .nav-item { display: block; padding: 7px 20px; color: #94a3b8; text-decoration: none; font-size: 13px; border-left: 2px solid transparent; transition: all .15s; cursor: pointer; }
-  .nav-item:hover, .nav-item.active { color: var(--text); background: rgba(59,130,246,.07); border-left-color: var(--accent); }
-  .nav-item .icon { margin-right: 7px; }
-  .main { margin-left: 260px; flex: 1; padding: 40px 48px 80px; max-width: 960px; }
-  .section { display: none; }
-  .section.active { display: block; }
-  h1 { font-size: 26px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
-  .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 32px; }
-  h2 { font-size: 18px; font-weight: 600; color: var(--text); margin: 36px 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
-  h3 { font-size: 14px; font-weight: 600; color: var(--text); margin: 20px 0 8px; }
-  p { color: #94a3b8; margin-bottom: 12px; }
-  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 16px; }
-  .cards-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 24px; }
-  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
-  .stat-card .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
-  .stat-card .value { font-size: 20px; font-weight: 700; margin-top: 4px; }
-  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px; overflow-x: auto; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12.5px; line-height: 1.7; color: #c9d1d9; margin: 10px 0 20px; }
-  code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; background: rgba(59,130,246,.1); color: var(--accent); padding: 2px 5px; border-radius: 4px; }
-  .endpoint { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; overflow: hidden; }
-  .endpoint-header { display: flex; align-items: center; gap: 12px; padding: 13px 18px; cursor: pointer; user-select: none; }
-  .endpoint-header:hover { background: var(--surface2); }
-  .method { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 5px; min-width: 54px; text-align: center; }
-  .GET    { background: rgba(34,197,94,.15);  color: #22c55e; }
-  .POST   { background: rgba(59,130,246,.15); color: #3b82f6; }
-  .PUT    { background: rgba(245,158,11,.15); color: #f59e0b; }
-  .DELETE { background: rgba(239,68,68,.15);  color: #ef4444; }
-  .endpoint-path { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--text); flex: 1; }
-  .endpoint-desc { font-size: 12px; color: var(--muted); }
-  .auth-badge { font-size: 10px; background: rgba(239,68,68,.12); color: #ef4444; padding: 2px 7px; border-radius: 10px; border: 1px solid rgba(239,68,68,.2); white-space: nowrap; }
-  .admin-badge { font-size: 10px; background: rgba(124,77,255,.15); color: #a78bfa; padding: 2px 7px; border-radius: 10px; border: 1px solid rgba(124,77,255,.25); white-space: nowrap; }
-  .op-badge { font-size: 10px; background: rgba(245,158,11,.12); color: #f59e0b; padding: 2px 7px; border-radius: 10px; border: 1px solid rgba(245,158,11,.25); white-space: nowrap; }
-  .endpoint-body { padding: 0 18px 16px; border-top: 1px solid var(--border); display: none; }
-  .endpoint-body.open { display: block; }
-  .endpoint-body h4 { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 14px 0 6px; }
-  table { width: 100%; border-collapse: collapse; margin: 10px 0 20px; font-size: 13px; }
-  th { text-align: left; padding: 9px 12px; background: var(--surface2); color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; border-bottom: 1px solid var(--border); }
-  td { padding: 9px 12px; border-bottom: 1px solid var(--border); color: #94a3b8; vertical-align: top; }
-  td:first-child { color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 12px; }
-  tr:last-child td { border-bottom: none; }
-  tr:hover td { background: rgba(59,130,246,.04); }
-  .alert { border-radius: 8px; padding: 12px 16px; margin: 12px 0 16px; font-size: 13px; }
-  .alert.info    { background: rgba(59,130,246,.08);  border-left: 3px solid var(--accent); color: #93c5fd; }
-  .alert.warning { background: rgba(245,158,11,.08);  border-left: 3px solid var(--yellow); color: #fcd34d; }
-  .alert.danger  { background: rgba(239,68,68,.08);   border-left: 3px solid var(--red);    color: #fca5a5; }
-  .alert.success { background: rgba(34,197,94,.08);   border-left: 3px solid var(--green);  color: #86efac; }
-  .arch-box { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; margin: 6px 0; font-size: 13px; color: #94a3b8; }
-  .arch-arrow { text-align: center; color: var(--muted); font-size: 18px; line-height: 1.8; }
-  .schema-field { display: flex; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); align-items: flex-start; }
-  .schema-field:last-child { border-bottom: none; }
-  .schema-key  { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text); min-width: 180px; }
-  .schema-type { font-size: 11px; color: #a78bfa; min-width: 80px; padding-top: 2px; }
-  .schema-note { font-size: 12px; color: var(--muted); flex: 1; }
-  .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; }
-  .breadcrumb { font-size: 12px; color: var(--muted); }
-  .breadcrumb span { color: var(--text); }
-  .doc-meta { font-size: 11px; color: var(--muted); display: flex; gap: 16px; }
-  .doc-meta strong { color: var(--accent); }
-  .role-row { display: flex; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
-  .role-row:last-child { border-bottom: none; }
-  .role-name { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text); min-width: 100px; }
-  .role-perms { font-size: 12px; color: #94a3b8; }
-  .file-tree { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; line-height: 2; color: #c9d1d9; background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin: 10px 0 20px; }
-  .file-tree .dir  { color: var(--accent); }
-  .file-tree .comment { color: var(--muted); }
-</style>
+<title>Мониторинг сети</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<nav class="sidebar">
-  <div class="sidebar-logo">
-    <div class="project">📡 net-monitor</div>
-    <div class="version">v0.9.0-beta</div>
-    <div class="badge">Developer &amp; Admin Documentation</div>
+<!-- ЭКРАН ЛОГИНА -->
+<div id="login-overlay" class="modal-overlay hidden">
+  <div class="modal">
+    <h2><img id="login-logo" src="/api/branding/logo" alt="" style="height:22px; vertical-align:middle; margin-right:8px;">Вход в <span id="login-app-name">NetMonitor</span></h2>
+    <form id="login-form">
+      <label>Логин<input type="text" id="l-username" autocomplete="username" required></label>
+      <label>Пароль<input type="password" id="l-password" autocomplete="current-password" required></label>
+      <div id="login-error" class="form-error hidden"></div>
+      <div class="modal-actions">
+        <button type="submit" class="btn-primary" style="width:100%">Войти</button>
+      </div>
+      <div class="hint" style="margin-top:6px;">По умолчанию: admin / admin — смените пароль после входа в разделе «Настройки».</div>
+    </form>
   </div>
+</div>
 
-  <div class="nav-section">
-    <div class="nav-label">Для администраторов</div>
-    <div class="nav-item active" onclick="show('admin-overview')"><span class="icon">🏠</span>Обзор системы</div>
-    <div class="nav-item" onclick="show('install')"><span class="icon">⚙️</span>Установка</div>
-    <div class="nav-item" onclick="show('docker')"><span class="icon">🐳</span>Docker-деплой</div>
-    <div class="nav-item" onclick="show('config')"><span class="icon">🔧</span>Настройка</div>
-    <div class="nav-item" onclick="show('backup')"><span class="icon">💾</span>Бэкап и восстановление</div>
-    <div class="nav-item" onclick="show('roles')"><span class="icon">👥</span>Роли и права доступа</div>
-    <div class="nav-item" onclick="show('integrations')"><span class="icon">🔌</span>Интеграции</div>
-    <div class="nav-item" onclick="show('alerts')"><span class="icon">🔔</span>Алерты и уведомления</div>
+<div class="app hidden" id="app-root">
+  <aside class="sidebar">
+    <div class="logo"><img id="sidebar-logo" src="/api/branding/logo" alt="" style="height:24px; vertical-align:middle; margin-right:8px;"><span id="sidebar-app-name">NetMonitor</span></div>
+    <nav>
+      <button class="nav-btn active" data-tab="dashboard">📊 Дешборд</button>
+      <button class="nav-btn" data-tab="devices">🗂 Устройства</button>
+      <button class="nav-btn" data-tab="monitoring">🛎 Мониторинг</button>
+      <button class="nav-btn" data-tab="maintenance">🔧 Обслуживание</button>
+      <button class="nav-btn hidden" data-tab="incidents" id="nav-incidents">🚨 Инциденты</button>
+      <button class="nav-btn admin-only" data-tab="discovery" id="nav-discovery">🔍 Обнаружение</button>
+      <button class="nav-btn" data-tab="map">🗺 Карта сети</button>
+      <button class="nav-btn" data-tab="settings">⚙ Настройки</button>
+    </nav>
+    <div class="sidebar-footer">
+      <div id="current-user" style="margin-bottom:8px;"></div>
+      <button id="logout-btn" class="btn-secondary" style="width:100%;">Выйти</button>
+      <div id="app-version" class="hint" style="margin-top:10px; text-align:center;"></div>
+    </div>
+  </aside>
+
+  <main class="content">
+
+    <!-- ДЕШБОРД -->
+    <section id="tab-dashboard" class="tab active">
+      <h1>Дешборд мониторинга</h1>
+
+      <div class="cards-row" id="category-cards"></div>
+
+      <h2>Ключевые устройства</h2>
+      <div class="key-devices" id="key-devices"></div>
+    </section>
+
+    <!-- УСТРОЙСТВА -->
+    <section id="tab-devices" class="tab">
+      <div class="tab-header">
+        <h1>Устройства</h1>
+        <div class="controls">
+          <select id="filter-category">
+            <option value="">Все категории</option>
+          </select>
+          <input id="search-input" type="text" placeholder="Поиск: имя / IP / MAC / расположение">
+          <div class="view-toggle">
+            <button id="view-table-btn" class="active">Таблица</button>
+            <button id="view-cards-btn">Карточки</button>
+          </div>
+          <button class="btn-secondary" id="export-devices-csv-btn">⬇ Экспорт CSV</button>
+          <button class="btn-primary admin-only" id="add-device-btn">+ Добавить устройство</button>
+        </div>
+      </div>
+
+      <div id="bulk-actions-bar" class="bulk-actions-bar hidden admin-only">
+        <span id="bulk-selected-count">Выбрано: 0</span>
+        <select id="bulk-category-select"></select>
+        <button class="small-btn" id="bulk-apply-category">Сменить категорию</button>
+        <button class="small-btn" id="bulk-enable-monitoring">Включить мониторинг</button>
+        <button class="small-btn" id="bulk-disable-monitoring">Выключить мониторинг</button>
+        <button class="small-btn" id="bulk-delete-btn" style="color:var(--red);">🗑 Удалить выбранные</button>
+        <button class="small-btn" id="bulk-clear-selection">Снять выделение</button>
+      </div>
+
+      <div id="devices-table-wrap">
+        <table id="devices-table">
+          <thead>
+            <tr>
+              <th class="admin-only"><input type="checkbox" id="select-all-devices"></th>
+              <th></th>
+              <th class="sortable" data-sort="name">Название</th>
+              <th class="sortable" data-sort="ip">IP</th>
+              <th class="sortable" data-sort="mac">MAC</th>
+              <th class="sortable" data-sort="location">Расположение</th>
+              <th class="sortable" data-sort="type">Тип</th>
+              <th class="sortable" data-sort="category">Категория</th>
+              <th>Комментарий</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="devices-tbody"></tbody>
+        </table>
+        <div id="devices-empty-state" class="hint hidden" style="padding:24px; text-align:center;"></div>
+      </div>
+
+      <div id="devices-cards-wrap" class="cards-grid hidden"></div>
+
+      <div id="devices-pagination" class="pagination-bar hidden">
+        <span id="pagination-info" class="hint"></span>
+        <div class="view-toggle">
+          <button id="page-prev-btn">‹ Назад</button>
+          <button id="page-next-btn">Вперёд ›</button>
+        </div>
+        <select id="page-size-select">
+          <option value="25">25 на странице</option>
+          <option value="50" selected>50 на странице</option>
+          <option value="100">100 на странице</option>
+          <option value="99999">Показать все</option>
+        </select>
+      </div>
+    </section>
+
+    <!-- ОБНАРУЖЕНИЕ -->
+    <section id="tab-discovery" class="tab">
+      <h1>Обнаружение сети</h1>
+
+      <h2>Скан подсети (ping-sweep)</h2>
+      <div class="settings-panel" style="max-width:640px;">
+        <div class="controls" style="margin-bottom:10px;">
+          <input type="text" id="scan-cidr" placeholder="192.168.1.0/24" style="min-width:200px;">
+          <button class="btn-primary" id="scan-btn">Сканировать</button>
+        </div>
+        <p class="hint">Найденные подсети сервера: <span id="local-subnets-hint">—</span>. Поддерживается диапазон от /24 до /30 (не более 256 адресов за раз).</p>
+        <div id="scan-result" class="hint" style="margin:8px 0;"></div>
+        <table id="scan-table" class="hidden">
+          <thead><tr><th></th><th>IP</th><th>Имя хоста</th><th>Статус</th><th></th></tr></thead>
+          <tbody id="scan-tbody"></tbody>
+        </table>
+        <button class="btn-secondary hidden" id="scan-add-selected" style="margin-top:10px;">Добавить отмеченные в реестр</button>
+      </div>
+
+      <h2>ARP-таблица и соседи MikroTik</h2>
+      <div class="settings-panel" style="max-width:640px;">
+        <div class="controls" style="margin-bottom:10px;">
+          <select id="discovery-router-select"></select>
+          <button class="btn-secondary" id="arp-btn">Получить ARP-таблицу</button>
+          <button class="btn-secondary" id="neighbors-btn">Получить соседей (MNDP)</button>
+          <button class="btn-primary" id="build-topology-btn">Построить топологию на карте</button>
+        </div>
+        <p class="hint">ARP-таблица показывает все IP/MAC, которые роутер видел в своей сети, с указанием порта. MNDP-соседи — устройства MikroTik/RouterOS, обнаруженные напрямую (имя, платформа, порт). «Построить топологию» использует оба источника и рисует реальные связи на карте вместо условной звезды.</p>
+        <div id="discovery-mt-result" class="hint" style="margin:8px 0;"></div>
+        <table id="discovery-mt-table" class="hidden">
+          <thead><tr><th></th><th>Имя/IP</th><th>MAC</th><th>Порт</th><th>Статус</th><th></th></tr></thead>
+          <tbody id="discovery-mt-tbody"></tbody>
+        </table>
+        <button class="btn-secondary hidden" id="mt-add-selected" style="margin-top:10px;">Добавить отмеченные в реестр</button>
+      </div>
+    </section>
+
+    <!-- КАРТА СЕТИ -->
+    <section id="tab-map" class="tab">
+      <div class="tab-header">
+        <h1>Карта сети</h1>
+        <div class="controls">
+          <input type="text" id="map-search" placeholder="Найти устройство: имя / IP / MAC" style="min-width:200px;">
+          <button class="btn-secondary admin-only" id="link-edit-btn">🔗 Редактировать связи</button>
+          <button class="btn-secondary admin-only" id="subnet-rules-btn">☁ Правила подсетей</button>
+          <button class="btn-secondary" id="tree-view-btn">🌳 Дерево</button>
+          <button class="btn-secondary hidden" id="tree-orientation-btn" title="Сменить ориентацию дерева">⇄ Горизонтально</button>
+          <div class="view-toggle">
+            <button id="zoom-out-btn" title="Уменьшить">−</button>
+            <button id="zoom-fit-btn" title="Уместить всё">⛶</button>
+            <button id="zoom-in-btn" title="Увеличить">+</button>
+          </div>
+        </div>
+      </div>
+      <div id="map-search-result" class="hint hidden" style="margin-bottom:8px;"></div>
+      <div id="link-edit-hint" class="hint hidden" style="margin-bottom:8px;">
+        Режим редактирования связей: кликните первое устройство, затем второе — появится линия.
+        Кликните по существующей линии, чтобы удалить её. <button class="small-btn" id="link-edit-exit">Готово</button>
+      </div>
+      <div class="map-wrap">
+        <svg id="network-svg" viewBox="0 0 1000 650" xmlns="http://www.w3.org/2000/svg"></svg>
+      </div>
+      <div class="legend" id="map-legend"></div>
+      <div class="hint" id="topology-hint" style="margin-top:8px;">Перетаскивайте узлы мышью, позиция сохранится автоматически · колесо мыши — зум</div>
+    </section>
+
+    <!-- ПРАВИЛА ПОДСЕТЕЙ (модалка) -->
+    <div id="subnet-rules-modal" class="modal-overlay hidden">
+      <div class="modal" style="width:560px;">
+        <h2>Правила подсетей</h2>
+        <p class="hint">Устройства, чей IP попадает в диапазон, визуально группируются на карте в «облако» с подписью — удобно, когда нет реальной топологии портов, но есть чёткая сегментация по подсетям/VLAN. Пример: <code>10.7.7.0/24</code> → «Wi-Fi клиенты».</p>
+        <table id="subnet-rules-table" style="margin-bottom:12px;">
+          <thead><tr><th>CIDR</th><th>Название</th><th>Цвет</th><th></th></tr></thead>
+          <tbody id="subnet-rules-tbody"></tbody>
+        </table>
+        <div class="modal-actions" style="justify-content:flex-start; gap:10px;">
+          <button type="button" class="btn-secondary" id="subnet-rule-add-row">+ Добавить правило</button>
+        </div>
+        <div id="subnet-rules-result" class="hint" style="margin:8px 0;"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" id="subnet-rules-close">Закрыть</button>
+          <button type="button" class="btn-primary" id="subnet-rules-save">Сохранить</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Подсказка для новой ручной связи (label) -->
+    <div id="link-label-modal" class="modal-overlay hidden">
+      <div class="modal" style="width:380px;">
+        <h2>Подпись связи</h2>
+        <form id="link-label-form">
+          <label>Например: «через свитч в шкафу», «порт 4»<input type="text" id="link-label-input" placeholder="необязательно"></label>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" id="link-label-cancel">Отмена</button>
+            <button type="submit" class="btn-primary">Создать связь</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- МОНИТОРИНГ -->
+    <section id="tab-monitoring" class="tab">
+      <div class="tab-header">
+        <h1>Мониторинг</h1>
+        <div class="controls">
+          <span class="hint" id="monitoring-count"></span>
+          <button class="btn-secondary admin-only" id="mon-add-all">Добавить все устройства</button>
+          <button class="btn-secondary admin-only" id="mon-remove-all">Убрать все из мониторинга</button>
+        </div>
+      </div>
+      <p class="hint">Опрашиваются (пингуются) только устройства из этого списка. Каждое — со своим интервалом. Остальные устройства просто хранятся в реестре без опроса.</p>
+      <table id="monitoring-table">
+        <thead>
+          <tr>
+            <th>Мониторить</th>
+            <th>Алерты</th>
+            <th>Название</th>
+            <th>IP</th>
+            <th>Категория</th>
+            <th>Статус</th>
+            <th>Последняя проверка</th>
+            <th>Интервал</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="monitoring-tbody"></tbody>
+      </table>
+    </section>
+
+    <!-- ИНЦИДЕНТЫ -->
+    <section id="tab-incidents" class="tab">
+      <div class="tab-header">
+        <h1>Инциденты</h1>
+        <div class="controls">
+          <span class="hint" id="incidents-stats"></span>
+        </div>
+      </div>
+
+      <h2>Сейчас недоступны</h2>
+      <div id="incidents-open-wrap">
+        <table id="incidents-open-table">
+          <thead><tr><th>Устройство</th><th>С какого момента</th><th>Длится</th><th>Эскалация</th></tr></thead>
+          <tbody id="incidents-open-tbody"></tbody>
+        </table>
+      </div>
+
+      <h2>История (последние 200)</h2>
+      <div id="incidents-closed-wrap">
+        <table id="incidents-closed-table">
+          <thead><tr><th>Устройство</th><th>Начало</th><th>Окончание</th><th>Длительность</th><th>Эскалация</th></tr></thead>
+          <tbody id="incidents-closed-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- НАСТРОЙКИ -->
+    <section id="tab-maintenance" class="tab">
+      <div class="tab-header">
+        <h1>Окна обслуживания</h1>
+        <div class="controls">
+          <button class="btn-primary" id="add-mw-btn">+ Добавить окно</button>
+        </div>
+      </div>
+      <p class="hint" style="margin-bottom:16px">В период обслуживания мониторинг продолжается, но алерты не отправляются.</p>
+      <div id="mw-list"></div>
+    </section>
+
+    <section id="tab-settings" class="tab">
+      <h1>Настройки</h1>
+
+      <div class="settings-subnav">
+        <button class="settings-tab-btn active" data-settings-tab="appearance">🎨 Внешний вид</button>
+        <button class="settings-tab-btn admin-only" data-settings-tab="alerts">🔔 Алерты</button>
+        <button class="settings-tab-btn admin-only" data-settings-tab="mikrotik">🔌 Интеграции</button>
+        <button class="settings-tab-btn admin-only" data-settings-tab="categories">🏷 Категории</button>
+        <button class="settings-tab-btn admin-only" data-settings-tab="users">👥 Пользователи</button>
+        <button class="settings-tab-btn admin-only" data-settings-tab="features">🧩 Функции</button>
+        <button class="settings-tab-btn admin-only" data-settings-tab="io">⇅ Импорт/Экспорт</button>
+        <button class="settings-tab-btn admin-only" data-settings-tab="audit">📜 Аудит-лог</button>
+        <button class="settings-tab-btn" data-settings-tab="profile">🔑 Профиль</button>
+        <button class="settings-tab-btn" data-settings-tab="about">ℹ О системе</button>
+      </div>
+
+      <!-- ВНЕШНИЙ ВИД -->
+      <div class="settings-subtab" data-settings-panel="appearance">
+        <h2>Тема</h2>
+        <div class="settings-panel" style="max-width:520px;">
+          <div class="modal-actions" style="justify-content:flex-start; gap:10px;">
+            <button type="button" class="btn-secondary theme-choice" data-theme="dark">🌙 Тёмная</button>
+            <button type="button" class="btn-secondary theme-choice" data-theme="light">☀ Светлая</button>
+          </div>
+          <p class="hint" style="margin-top:10px;">Выбор запоминается в этом браузере и не влияет на других пользователей.</p>
+        </div>
+
+        <h2 class="admin-only strict-admin-only">Брендинг (общее для всех пользователей)</h2>
+        <div class="settings-panel admin-only strict-admin-only" style="max-width:520px;">
+          <form id="branding-form">
+            <label>Название приложения<input type="text" id="brand-name" placeholder="NetMonitor" maxlength="40"></label>
+            <label>Акцентный цвет (кнопки, ссылки, выделения)<input type="color" id="brand-accent"></label>
+            <label>Тема по умолчанию (для тех, кто ещё не выбрал свою)
+              <select id="brand-default-theme">
+                <option value="dark">Тёмная</option>
+                <option value="light">Светлая</option>
+              </select>
+            </label>
+            <div class="modal-actions" style="justify-content:flex-start;">
+              <button type="submit" class="btn-primary">Сохранить</button>
+            </div>
+            <div id="branding-result" class="hint" style="margin-top:8px;"></div>
+          </form>
+
+          <div style="border-top:1px solid var(--border); margin:14px 0 10px 0; padding-top:12px;">
+            <p class="hint" style="margin-bottom:8px;">Текущий логотип: <img id="logo-preview" src="/api/branding/logo" alt="логотип" style="height:28px; vertical-align:middle; margin-left:6px;"></p>
+            <label>Загрузить свой (SVG, PNG или JPG, до 1 МБ)
+              <input type="file" id="logo-file" accept=".svg,.png,.jpg,.jpeg">
+            </label>
+            <div class="modal-actions" style="justify-content:flex-start; margin-top:10px; gap:10px;">
+              <button type="button" class="btn-primary" id="logo-upload-btn">Загрузить</button>
+              <button type="button" class="btn-secondary" id="logo-reset-btn">Сбросить на стандартный</button>
+            </div>
+            <div id="logo-result" class="hint" style="margin-top:8px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- АЛЕРТЫ -->
+      <div class="settings-subtab hidden" data-settings-panel="alerts">
+      <h2 class="admin-only">Алерты (оповещения о недоступности)</h2>
+      <div class="settings-panel admin-only" style="max-width:560px;">
+        <form id="alert-settings-form">
+          <label class="checkbox-label"><input type="checkbox" id="al-enabled"> Включить алерты</label>
+          <label>Порог срабатывания (провалов подряд)
+            <select id="al-threshold">
+              <option value="1">1 (сразу)</option>
+              <option value="2" selected>2</option>
+              <option value="3">3</option>
+              <option value="5">5</option>
+            </select>
+          </label>
+          <label>Повторять уведомление, пока не восстановится
+            <select id="al-repeat">
+              <option value="0">Не повторять (только один раз)</option>
+              <option value="15">Каждые 15 минут</option>
+              <option value="30" selected>Каждые 30 минут</option>
+              <option value="60">Каждый час</option>
+              <option value="180">Каждые 3 часа</option>
+            </select>
+          </label>
+          <label class="checkbox-label"><input type="checkbox" id="al-recovery" checked> Уведомлять о восстановлении устройства</label>
+
+          <div style="border-top:1px solid var(--border); margin:6px 0; padding-top:12px;">
+            <label class="checkbox-label"><input type="checkbox" id="al-tg-enabled"> Telegram-бот</label>
+            <label>Bot Token<input type="password" id="al-tg-token" placeholder="123456:ABC-DEF..."></label>
+            <label>Chat ID<input type="text" id="al-tg-chat" placeholder="-1001234567890 или ваш ID"></label>
+          </div>
+
+          <div id="escalation-block" class="hidden" style="border-top:1px solid var(--border); margin:6px 0; padding-top:12px;">
+            <label class="checkbox-label"><input type="checkbox" id="al-esc-enabled"> Эскалация — доп. уведомление, если проблема не решается долго</label>
+            <label>Через сколько минут простоя эскалировать
+              <select id="al-esc-minutes">
+                <option value="30">30 минут</option>
+                <option value="60" selected>1 час</option>
+                <option value="180">3 часа</option>
+                <option value="360">6 часов</option>
+              </select>
+            </label>
+            <label>Telegram Chat ID для эскалации (например, дежурный инженер отдельно от общего чата)<input type="text" id="al-esc-chat" placeholder="-1009876543210"></label>
+          </div>
+
+          <div style="border-top:1px solid var(--border); margin:6px 0; padding-top:12px;">
+            <label class="checkbox-label"><input type="checkbox" id="al-wh-enabled"> Webhook (произвольный URL, POST JSON)</label>
+            <label>URL<input type="text" id="al-wh-url" placeholder="https://example.com/hook"></label>
+          </div>
+
+          <div class="modal-actions" style="justify-content:flex-start; gap:10px;">
+            <button type="submit" class="btn-secondary">Сохранить</button>
+            <button type="button" class="btn-primary" id="al-test-btn">Отправить тестовое</button>
+          </div>
+          <div id="al-result" class="hint" style="margin-top:8px;"></div>
+        </form>
+        <p class="hint">
+          Как получить Telegram Bot Token: напишите @BotFather → /newbot. Chat ID своего чата можно узнать у @userinfobot,
+          для группы — добавьте бота в группу и посмотрите ID через @RawDataBot.
+          Оповещения по конкретному устройству можно отключить в его карточке (галочка «Уведомления») или во вкладке «Мониторинг».
+        </p>
+      </div>
+      </div>
+
+      <!-- MIKROTIK -->
+      <div class="settings-subtab hidden" data-settings-panel="mikrotik">
+      <h2 class="admin-only">Подключённые устройства и контроллеры</h2>
+      <div class="settings-panel admin-only" style="max-width:760px;">
+        <table id="connections-table" style="margin-bottom:14px;">
+          <thead><tr><th>Тип</th><th>Название</th><th>Адрес</th><th>Порт</th><th>Логин</th><th></th></tr></thead>
+          <tbody id="connections-tbody"></tbody>
+        </table>
+        <button type="button" class="btn-secondary" id="mt-import-all-btn">Импортировать со всех MikroTik разом</button>
+        <div id="mt-import-all-result" class="hint" style="margin-top:8px;"></div>
+
+        <h2 style="margin-top:22px;" class="strict-admin-only">Добавить подключение</h2>
+        <div class="strict-admin-only">
+        <form id="connection-form">
+          <label>Тип
+            <select id="conn-type">
+              <option value="mikrotik">MikroTik (RouterOS API)</option>
+              <option value="unifi">UniFi Controller (UDM / Cloud Key / Software)</option>
+              <option value="cisco">Cisco (по SSH)</option>
+            </select>
+          </label>
+          <label>Название (для себя)<input type="text" id="conn-name" placeholder="Например: Офис — ядро"></label>
+          <label>Адрес (IP или hostname)<input type="text" id="conn-host" placeholder="192.168.1.1"></label>
+          <label id="conn-port-wrap">Порт<input type="text" id="conn-port" placeholder="8728"></label>
+          <label>Логин<input type="text" id="conn-user" placeholder="admin"></label>
+          <label>Пароль<input type="password" id="conn-password"></label>
+          <label id="conn-site-wrap" class="hidden">UniFi Site (обычно "default")<input type="text" id="conn-site" value="default"></label>
+          <label class="checkbox-label hidden" id="conn-unifios-wrap"><input type="checkbox" id="conn-unifios"> Это UniFi OS консоль (UDM / UDM Pro / Cloud Key Gen2+) — не классический software-контроллер</label>
+          <label class="checkbox-label" id="conn-tls-wrap"><input type="checkbox" id="conn-tls"> Использовать API-SSL (MikroTik, порт 8729)</label>
+          <div class="modal-actions" style="justify-content:flex-start; gap:10px;">
+            <button type="submit" class="btn-primary">Добавить</button>
+          </div>
+          <div id="conn-result" class="hint" style="margin-top:8px;"></div>
+        </form>
+        <p class="hint" id="conn-hint-mikrotik">MikroTik: требуется включённый API-сервис (IP → Services → api, порт 8728, либо api-ssl 8729).</p>
+        <p class="hint hidden" id="conn-hint-unifi">UniFi: логин/пароль локального администратора контроллера. <b>Порт по умолчанию зависит от типа консоли</b> — 443 для UniFi OS (UDM/UDM Pro/Cloud Key Gen2+), 8443 для классического software-контроллера или Cloud Key Gen1 (самая частая причина «не подключается» — неверный порт). Самоподписанный сертификат контроллера принимается автоматически. Импортируются и инфраструктура (точки доступа/свитчи/шлюзы), и подключённые клиенты.</p>
+        <p class="hint hidden" id="conn-hint-cisco">Cisco: подключение по SSH, выполняется команда <code>show ip arp</code>. Нужен пользователь с правом просмотра (privilege level 15 надёжнее всего). Работает для большинства IOS/IOS-XE с включённым SSH.</p>
+        <p class="hint">Устройства из импорта попадают в реестр с пометкой источника; мониторинг для них по умолчанию выключен — включите нужные во вкладке «Мониторинг».</p>
+        </div>
+      </div>
+      </div>
+
+      <!-- КАТЕГОРИИ -->
+      <div class="settings-subtab hidden" data-settings-panel="categories">
+      <h2 class="admin-only">Категории устройств</h2>
+      <div class="settings-panel admin-only" style="max-width:520px;">
+        <p class="hint">Категории используются в дешборде, фильтрах, цветах на карте и облаках подсетей. Нельзя удалить категорию, пока на неё ссылается хотя бы одно устройство — сначала перенесите их в другую.</p>
+        <table id="categories-table" style="margin-bottom:12px;">
+          <thead><tr><th>Название</th><th>Цвет</th><th></th></tr></thead>
+          <tbody id="categories-tbody"></tbody>
+        </table>
+        <div class="modal-actions" style="justify-content:flex-start; gap:10px;">
+          <button type="button" class="btn-secondary" id="category-add-row">+ Добавить категорию</button>
+        </div>
+        <div id="categories-result" class="hint" style="margin:8px 0;"></div>
+        <div class="modal-actions" style="justify-content:flex-start;">
+          <button type="button" class="btn-primary" id="categories-save">Сохранить категории</button>
+        </div>
+      </div>
+      </div>
+
+      <!-- ПОЛЬЗОВАТЕЛИ -->
+      <div class="settings-subtab hidden" data-settings-panel="users">
+      <h2 class="admin-only strict-admin-only">Пользователи</h2>
+      <div class="settings-panel admin-only strict-admin-only" style="max-width:520px;">
+        <table id="users-table" style="margin-bottom:14px;">
+          <thead><tr><th>Логин</th><th>Роль</th><th></th></tr></thead>
+          <tbody id="users-tbody"></tbody>
+        </table>
+        <h2 style="margin-top:22px;">Добавить пользователя</h2>
+        <form id="user-form">
+          <label>Логин<input type="text" id="u-username" placeholder="latin, 3-32 символа" required></label>
+          <label>Пароль (минимум 8 символов)<input type="password" id="u-password" required minlength="8"></label>
+          <label>Роль
+            <select id="u-role">
+              <option value="viewer">Только просмотр</option>
+              <option value="operator">Operator (повседневная работа)</option>
+              <option value="admin">Администратор</option>
+            </select>
+          </label>
+          <p class="hint">Operator: устройства, карта, мониторинг, обнаружение сети, алерты, категории — без доступа к пользователям, брендингу, резервным копиям, фиче-флагам и учётным данным интеграций.</p>
+          <div class="modal-actions" style="justify-content:flex-start;">
+            <button type="submit" class="btn-primary">Добавить пользователя</button>
+          </div>
+          <div id="user-result" class="hint" style="margin-top:8px;"></div>
+        </form>
+        <p class="hint">Роль «Только просмотр» — доступ к дешборду, устройствам, карте и мониторингу без возможности что-либо менять: без добавления/редактирования/удаления устройств, без настроек, без обнаружения сети.</p>
+      </div>
+      </div>
+
+      <!-- ФУНКЦИИ -->
+      <div class="settings-subtab hidden" data-settings-panel="features">
+      <h2 class="admin-only strict-admin-only">Функции (дополнительные модули)</h2>
+      <div class="settings-panel admin-only strict-admin-only" style="max-width:640px;">
+        <p class="hint">Каждый модуль выключен по умолчанию — включайте только то, что реально нужно, чтобы не грузить сеть и сервер лишним опросом.</p>
+        <form id="features-form">
+          <label class="checkbox-label"><input type="checkbox" id="feat-snmp"> <b>SNMP-мониторинг</b> — аптайм и загрузка CPU по SNMP (для устройств, у которых включён SNMP-агент, например MikroTik)</label>
+          <label class="checkbox-label"><input type="checkbox" id="feat-portchecks"> <b>Проверка TCP-портов/сервисов</b> — не только ping, а что конкретный порт отвечает (например 554 у камеры, 3389 у сервера)</label>
+          <label class="checkbox-label"><input type="checkbox" id="feat-incidents"> <b>История инцидентов + эскалация алертов</b> — журнал даунтаймов (когда и на сколько устройство падало) и доп. канал оповещения, если проблема не решается долго</label>
+          <label class="checkbox-label"><input type="checkbox" id="feat-auditlog"> <b>Аудит-лог</b> — журнал действий пользователей (кто и когда добавил/изменил/удалил устройство, настройки, пользователя)</label>
+          <div class="modal-actions" style="justify-content:flex-start;">
+            <button type="submit" class="btn-primary">Сохранить</button>
+          </div>
+          <div id="features-result" class="hint" style="margin-top:8px;"></div>
+        </form>
+      </div>
+      </div>
+
+      <!-- ИМПОРТ/ЭКСПОРТ -->
+      <div class="settings-subtab hidden" data-settings-panel="io">
+      <h2 class="admin-only strict-admin-only">Резервная копия</h2>
+      <div class="settings-panel admin-only strict-admin-only" style="max-width:640px;">
+        <p class="hint">Полный снимок данных (устройства, пользователи, настройки, история, топология, инциденты, аудит-лог) в одном JSON-файле. Секрет сессии в бэкап не входит — он привязан к конкретной инсталляции.</p>
+        <div class="modal-actions" style="justify-content:flex-start; gap:10px;">
+          <button type="button" class="btn-primary" id="backup-download-btn">⬇ Скачать бэкап</button>
+        </div>
+        <div id="backup-download-result" class="hint" style="margin:8px 0;"></div>
+        <div style="border-top:1px solid var(--border); margin:14px 0 10px 0; padding-top:12px;">
+          <label>Восстановить из файла бэкапа
+            <input type="file" id="backup-restore-file" accept=".json">
+          </label>
+          <div class="modal-actions" style="justify-content:flex-start; margin-top:10px;">
+            <button type="button" class="btn-secondary" id="backup-restore-btn">⬆ Восстановить</button>
+          </div>
+          <p class="hint" style="color:var(--red);">Внимание: восстановление полностью заменит текущие данные (устройства, пользователей, настройки и т.д.) содержимым файла. Действие необратимо — сначала скачайте текущий бэкап, если не уверены.</p>
+          <div id="backup-restore-result" class="hint" style="margin-top:8px;"></div>
+        </div>
+      </div>
+
+      <h2 class="admin-only">Импорт устройств из CSV</h2>
+      <div class="settings-panel admin-only" style="max-width:640px;">
+        <p class="hint">Формат: первая строка — заголовок с колонками <code>name,ip,mac,location,type,category,comment</code> (обязательны только <code>name</code> и <code>ip</code>). Категория — один из id: network, server, workstation, cctv, other.</p>
+        <textarea id="csv-input" rows="6" placeholder="name,ip,mac,location,type,category,comment&#10;Камера склад,10.7.6.20,AA:BB:CC:00:01:05,Склад,IP Camera,cctv," style="width:100%; font-family:monospace; font-size:12px;"></textarea>
+        <div class="modal-actions" style="justify-content:flex-start; margin-top:10px;">
+          <button type="button" class="btn-primary" id="csv-import-btn">Импортировать</button>
+        </div>
+        <div id="csv-import-result" class="hint" style="margin-top:8px;"></div>
+      </div>
+
+      <h2>Отчёты</h2>
+      <div class="settings-panel" style="max-width:520px;">
+        <p class="hint">Отчёт по аптайму всех устройств за 24ч/7д в формате CSV — открывается в Excel/Google Таблицах.</p>
+        <a class="btn-secondary" id="export-uptime-btn" href="/api/reports/uptime.csv" style="display:inline-block; text-decoration:none;">⬇ Скачать отчёт по аптайму (CSV)</a>
+      </div>
+
+      <h2>База производителей (OUI)</h2>
+      <div class="settings-panel" style="max-width:520px;">
+        <p class="hint">Определение производителя устройства по первым байтам MAC-адреса (реестр IEEE). Обновляется автоматически при запуске сервера, если данных ещё нет или они старше 30 дней.</p>
+        <p id="oui-status" class="hint" style="margin:10px 0;">Загрузка статуса...</p>
+        <button type="button" class="btn-secondary admin-only" id="oui-refresh-btn">Обновить сейчас</button>
+        <div id="oui-refresh-result" class="hint" style="margin-top:8px;"></div>
+      </div>
+      </div>
+
+      <!-- АУДИТ-ЛОГ -->
+      <div class="settings-subtab hidden" data-settings-panel="audit">
+      <h2 class="admin-only strict-admin-only">Аудит-лог</h2>
+      <div class="settings-panel admin-only strict-admin-only" style="max-width:760px;">
+        <p class="hint" id="audit-log-hint">Требует включения функции «Аудит-лог» в разделе «Функции».</p>
+        <div class="modal-actions hidden" id="audit-log-actions" style="justify-content:flex-start; margin-bottom:10px;">
+          <a class="btn-secondary" href="/api/audit-log/export.csv" style="text-decoration:none;">⬇ Скачать CSV</a>
+        </div>
+        <table id="audit-log-table" class="hidden">
+          <thead><tr><th>Время</th><th>Пользователь</th><th>Действие</th><th>Детали</th></tr></thead>
+          <tbody id="audit-log-tbody"></tbody>
+        </table>
+        <div id="audit-log-pagination" class="pagination-bar hidden">
+          <span id="audit-log-pagination-info" class="hint"></span>
+          <div class="view-toggle">
+            <button id="audit-log-prev-btn">‹ Назад</button>
+            <button id="audit-log-next-btn">Вперёд ›</button>
+          </div>
+        </div>
+      </div>
+      </div>
+
+      <!-- ПРОФИЛЬ -->
+      <div class="settings-subtab hidden" data-settings-panel="profile">
+      <h2>Смена пароля</h2>
+      <div class="settings-panel">
+        <form id="password-form">
+          <label>Текущий пароль<input type="password" id="p-current" required></label>
+          <label>Новый пароль (минимум 8 символов)<input type="password" id="p-new" required minlength="8"></label>
+          <div class="modal-actions" style="justify-content:flex-start;">
+            <button type="submit" class="btn-primary">Изменить пароль</button>
+          </div>
+          <div id="pw-result" class="hint" style="margin-top:8px;"></div>
+        </form>
+      </div>
+      </div>
+
+      <!-- О СИСТЕМЕ -->
+      <div class="settings-subtab hidden" data-settings-panel="about">
+      <h2>О системе</h2>
+
+      <!-- Карточки версии и ссылок -->
+      <div class="about-hero">
+        <div class="about-logo">📡</div>
+        <div class="about-title-block">
+          <div class="about-app-name">net-monitor</div>
+          <div class="about-version-line">
+            <span class="about-version-badge" id="about-version">—</span>
+            <span class="about-node-badge" id="about-node">Node.js —</span>
+          </div>
+          <div class="about-desc">Self-hosted система мониторинга локальной сети</div>
+        </div>
+      </div>
+
+      <div class="about-links-row">
+        <a class="about-link-btn" href="https://github.com/DarkyAndSparky/net-monitor" target="_blank" rel="noopener">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.604-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.579.688.481C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+          GitHub
+        </a>
+        <a class="about-link-btn" href="https://github.com/DarkyAndSparky/net-monitor/blob/main/docs/index.html" target="_blank" rel="noopener">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+          Документация
+        </a>
+      </div>
+
+      <!-- Системная информация -->
+      <div class="about-section-label">Системная информация</div>
+      <div class="about-info-grid" id="about-info-grid">
+        <div class="about-info-row"><span class="about-info-key">Версия приложения</span><span class="about-info-val" id="ai-version">—</span></div>
+        <div class="about-info-row"><span class="about-info-key">Node.js</span><span class="about-info-val" id="ai-node">—</span></div>
+        <div class="about-info-row"><span class="about-info-key">SQLite</span><span class="about-info-val">node:sqlite (встроенный)</span></div>
+        <div class="about-info-row"><span class="about-info-key">Аптайм сервера</span><span class="about-info-val" id="ai-uptime">—</span></div>
+        <div class="about-info-row"><span class="about-info-key">Время сервера</span><span class="about-info-val" id="ai-time">—</span></div>
+        <div class="about-info-row"><span class="about-info-key">База данных</span><span class="about-info-val">data/netmonitor.db</span></div>
+      </div>
+
+      <!-- Зависимости -->
+      <div class="about-section-label">Зависимости (backend)</div>
+      <div class="about-deps-grid" id="about-deps-backend">
+        <div class="about-dep-card"><span class="dep-name">express</span><span class="dep-ver">^4.19</span><span class="dep-desc">HTTP-сервер</span></div>
+        <div class="about-dep-card"><span class="dep-name">express-session</span><span class="dep-ver">^1.18</span><span class="dep-desc">Сессии</span></div>
+        <div class="about-dep-card"><span class="dep-name">node:sqlite</span><span class="dep-ver">встроен</span><span class="dep-desc">SQLite (без компиляции)</span></div>
+        <div class="about-dep-card"><span class="dep-name">pino</span><span class="dep-ver">^9.3</span><span class="dep-desc">Структурированные логи</span></div>
+        <div class="about-dep-card"><span class="dep-name">node-routeros</span><span class="dep-ver">^1.6</span><span class="dep-desc">MikroTik API</span></div>
+        <div class="about-dep-card"><span class="dep-name">net-snmp</span><span class="dep-ver">^3.0</span><span class="dep-desc">SNMP опрос</span></div>
+        <div class="about-dep-card"><span class="dep-name">ssh2</span><span class="dep-ver">^1.15</span><span class="dep-desc">Cisco SSH</span></div>
+      </div>
+
+      <div class="about-section-label">Технологии (frontend)</div>
+      <div class="about-deps-grid">
+        <div class="about-dep-card"><span class="dep-name">Vanilla JS</span><span class="dep-ver">ES2020+</span><span class="dep-desc">Без фреймворков</span></div>
+        <div class="about-dep-card"><span class="dep-name">SVG</span><span class="dep-ver">нативный</span><span class="dep-desc">Карта сети</span></div>
+        <div class="about-dep-card"><span class="dep-name">EventSource</span><span class="dep-ver">нативный</span><span class="dep-desc">SSE / live-обновления</span></div>
+        <div class="about-dep-card"><span class="dep-name">Tabler Icons</span><span class="dep-ver">3.19</span><span class="dep-desc">SVG иконки (CDN)</span></div>
+        <div class="about-dep-card"><span class="dep-name">CSS Variables</span><span class="dep-ver">нативный</span><span class="dep-desc">Тёмная / светлая тема</span></div>
+      </div>
+
+      <!-- MIT Лицензия -->
+      <div class="about-section-label">License</div>
+      <div class="about-license-block">
+        <div class="about-license-header">
+          <span class="about-license-badge">MIT License</span>
+          <span class="about-license-year">Copyright © 2026 DarkyAndSparky</span>
+        </div>
+        <p class="about-license-text">
+          Permission is hereby granted, free of charge, to any person obtaining a copy
+          of this software and associated documentation files (the "Software"), to deal
+          in the Software without restriction, including without limitation the rights
+          to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+          copies of the Software, and to permit persons to whom the Software is
+          furnished to do so, subject to the following conditions: The above copyright
+          notice and this permission notice shall be included in all copies or
+          substantial portions of the Software.
+        </p>
+        <p class="about-license-text" style="opacity:.6; font-size:11px; margin-top:6px;">
+          THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+          IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+          FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+          AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+          LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+          OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+          THE SOFTWARE.
+        </p>
+        <a class="about-license-link" href="/api/license" download="LICENSE.txt">
+          ⬇ Download LICENSE.txt
+        </a>
+      </div>
+
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- Модалка добавления/редактирования устройства -->
+<div id="device-modal" class="modal-overlay hidden">
+  <div class="modal modal-wide">
+    <h2 id="modal-title">Новое устройство</h2>
+    <!-- Вкладки формы -->
+    <div class="form-tabs">
+      <button type="button" class="form-tab active" data-tab="tab-basic">Основное</button>
+      <button type="button" class="form-tab" data-tab="tab-monitoring">Мониторинг</button>
+      <button type="button" class="form-tab" data-tab="tab-advanced" id="tab-advanced-btn">Дополнительно</button>
+    </div>
+    <form id="device-form">
+      <input type="hidden" id="f-id">
+      <div id="device-form-error" class="form-error hidden"></div>
+
+      <!-- Вкладка 1: Основное -->
+      <div class="tab-panel active" id="tab-basic">
+        <label>Название<input type="text" id="f-name" required placeholder="router-01"></label>
+        <label>IP-адрес<input type="text" id="f-ip" placeholder="192.168.1.10"></label>
+        <label>MAC-адрес<input type="text" id="f-mac" placeholder="AA:BB:CC:00:00:01"></label>
+        <label>Тип устройства
+          <select id="f-type-select">
+            <option value="Router">⇄ Роутер</option>
+            <option value="Switch">▤ Свитч</option>
+            <option value="Access Point">📶 Точка доступа</option>
+            <option value="Firewall">🛡 Файрвол</option>
+            <option value="Modem">📡 Модем</option>
+            <option value="IP Camera">◉ IP-камера</option>
+            <option value="NVR">⏺ NVR/видеорегистратор</option>
+            <option value="Server">▣ Сервер</option>
+            <option value="NAS">🗄 NAS/хранилище</option>
+            <option value="UPS">🔋 ИБП</option>
+            <option value="PC">🖥 Компьютер</option>
+            <option value="Laptop">💻 Ноутбук</option>
+            <option value="Printer">🖨 Принтер</option>
+            <option value="IP Phone">☎ IP-телефон</option>
+            <option value="TV">📺 ТВ-панель</option>
+            <option value="IoT Sensor">⚙ IoT-датчик</option>
+            <option value="DHCP Client">● DHCP-клиент</option>
+            <option value="__custom__">✎ Другое (указать вручную)</option>
+          </select>
+        </label>
+        <label id="f-type-custom-wrap" class="hidden">Свой вариант<input type="text" id="f-type-custom" placeholder="Например: Тонкий клиент"></label>
+        <label>Категория<select id="f-category"></select></label>
+        <label class="checkbox-label"><input type="checkbox" id="f-key"> Ключевое устройство (отображается на дашборде)</label>
+      </div>
+
+      <!-- Вкладка 2: Мониторинг -->
+      <div class="tab-panel hidden" id="tab-monitoring">
+        <label class="checkbox-label"><input type="checkbox" id="f-monitored" checked> Включить в мониторинг (пинговать)</label>
+        <label class="checkbox-label"><input type="checkbox" id="f-alerts" checked> Уведомления при недоступности (алерты)</label>
+        <label id="f-interval-wrap">Интервал проверки
+          <select id="f-interval">
+            <option value="15">15 секунд</option>
+            <option value="30">30 секунд</option>
+            <option value="60" selected>1 минута</option>
+            <option value="300">5 минут</option>
+            <option value="900">15 минут</option>
+          </select>
+        </label>
+        <div id="f-snmp-wrap" class="hidden" style="padding-top:10px; border-top:1px solid var(--border); margin-top:8px;">
+          <label class="checkbox-label"><input type="checkbox" id="f-snmp-enabled"> Опрашивать по SNMP</label>
+          <label>SNMP community<input type="text" id="f-snmp-community" value="public"></label>
+          <label>SNMP порт<input type="text" id="f-snmp-port" value="161"></label>
+        </div>
+        <div id="f-ports-wrap" class="hidden" style="padding-top:10px; border-top:1px solid var(--border); margin-top:8px;">
+          <label>Проверять TCP-порты (через запятую)<input type="text" id="f-portchecks" placeholder="80,443,554"></label>
+        </div>
+      </div>
+
+      <!-- Вкладка 3: Дополнительно -->
+      <div class="tab-panel hidden" id="tab-advanced">
+        <label>Расположение<input type="text" id="f-location" placeholder="Этаж 1, каб. 3"></label>
+        <label>Комментарий<textarea id="f-comment" rows="3"></textarea></label>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" id="cancel-btn">Отмена</button>
+        <button type="submit" class="btn-primary">Сохранить</button>
+      </div>
+    </form>
   </div>
+</div>
 
-  <div class="nav-section">
-    <div class="nav-label">Для разработчиков</div>
-    <div class="nav-item" onclick="show('arch')"><span class="icon">🏗</span>Архитектура</div>
-    <div class="nav-item" onclick="show('stack')"><span class="icon">📦</span>Стек и зависимости</div>
-    <div class="nav-item" onclick="show('db-schema')"><span class="icon">🗄</span>Схема БД (SQLite)</div>
-    <div class="nav-item" onclick="show('sse')"><span class="icon">⚡</span>SSE / Реалтайм</div>
-    <div class="nav-item" onclick="show('metrics')"><span class="icon">📊</span>Prometheus /metrics</div>
-    <div class="nav-item" onclick="show('contrib')"><span class="icon">🚀</span>Разработка и контрибьюшн</div>
+<!-- Maintenance window modal -->
+<div id="mw-modal" class="modal-overlay hidden">
+  <div class="modal">
+    <h2>Добавить окно обслуживания</h2>
+    <form id="mw-form">
+      <label>Название<input type="text" id="mw-name" value="Плановые работы"></label>
+      <label class="checkbox-label"><input type="checkbox" id="mw-all"> Все устройства</label>
+      <label id="mw-devices-wrap">Устройства
+        <select id="mw-devices" multiple size="5" style="height:120px;"></select>
+        <span class="hint">Удерживайте Ctrl для выбора нескольких</span>
+      </label>
+      <label>Начало<input type="datetime-local" id="mw-start"></label>
+      <label>Конец<input type="datetime-local" id="mw-end"></label>
+      <label>Примечание<input type="text" id="mw-note" placeholder="Замена оборудования, перезагрузка..."></label>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" onclick="document.getElementById('mw-modal').classList.add('hidden')">Отмена</button>
+        <button type="submit" class="btn-primary">Создать</button>
+      </div>
+    </form>
   </div>
+</div>
 
-  <div class="nav-section">
-    <div class="nav-label">REST API</div>
-    <div class="nav-item" onclick="show('api-auth')"><span class="icon">🔐</span>Auth</div>
-    <div class="nav-item" onclick="show('api-devices')"><span class="icon">💻</span>Devices</div>
-    <div class="nav-item" onclick="show('api-monitoring')"><span class="icon">📈</span>Monitoring</div>
-    <div class="nav-item" onclick="show('api-topology')"><span class="icon">🗺</span>Topology</div>
-    <div class="nav-item" onclick="show('api-integrations')"><span class="icon">🔌</span>Integrations</div>
-    <div class="nav-item" onclick="show('api-settings')"><span class="icon">⚙️</span>Settings</div>
-  </div>
-</nav>
-
-<main class="main">
-
-<!-- ADMIN OVERVIEW -->
-<section id="admin-overview" class="section active">
-  <div class="top-bar"><div class="breadcrumb">Docs / <span>Обзор системы</span></div><div class="doc-meta"><strong>v</strong> 0.9.0-beta</div></div>
-  <h1>net-monitor</h1>
-  <p class="subtitle">Self-hosted система мониторинга локальной сети — устройства, карта, пинг, SNMP, MikroTik, алерты.</p>
-
-  <div class="cards-grid">
-    <div class="stat-card"><div class="label">Хранилище данных</div><div class="value" style="color:var(--accent)">SQLite</div></div>
-    <div class="stat-card"><div class="label">Порт по умолчанию</div><div class="value" style="color:var(--green)">9222</div></div>
-    <div class="stat-card"><div class="label">Node.js</div><div class="value" style="color:var(--yellow)">≥ 18.0</div></div>
-    <div class="stat-card"><div class="label">Лицензия</div><div class="value" style="color:var(--muted);font-size:16px">MIT</div></div>
-  </div>
-
-  <h2>Что умеет</h2>
-  <table>
-    <tr><th>Модуль</th><th>Описание</th></tr>
-    <tr><td>Реестр устройств</td><td>Добавление, редактирование, категории, теги, CSV-импорт/экспорт, массовые операции</td></tr>
-    <tr><td>Карта сети</td><td>SVG-карта с перетаскиванием, деревом, подсетями, автотопологией</td></tr>
-    <tr><td>Мониторинг (Ping)</td><td>Проверка доступности с настраиваемым интервалом, история, sparkline, аптайм</td></tr>
-    <tr><td>SNMP (опц.)</td><td>Опрос OID, аптайм, CPU MikroTik, расширяемо</td></tr>
-    <tr><td>TCP port checks (опц.)</td><td>Проверка доступности портов сервисов</td></tr>
-    <tr><td>Алерты</td><td>Telegram Bot, Webhook, эскалация, инциденты</td></tr>
-    <tr><td>Интеграции</td><td>MikroTik RouterOS API, UniFi Controller, Cisco SSH</td></tr>
-    <tr><td>Обнаружение сети</td><td>Ping sweep, ARP через MikroTik, MNDP-соседи, автотопология</td></tr>
-    <tr><td>SSE</td><td>Живые обновления карты и статусов без перезагрузки страницы</td></tr>
-    <tr><td>Prometheus /metrics</td><td>Экспортёр для Grafana, Alertmanager</td></tr>
-    <tr><td>Роли</td><td>admin / operator / viewer с гранулярными правами</td></tr>
-    <tr><td>Аудит-лог (опц.)</td><td>Журнал всех действий с пагинацией и CSV-экспортом</td></tr>
-    <tr><td>Брендинг</td><td>Название приложения, цвет акцента, логотип, тёмная/светлая тема</td></tr>
-  </table>
-
-  <h2>Требования</h2>
-  <table>
-    <tr><th>Компонент</th><th>Версия</th><th>Примечание</th></tr>
-    <tr><td>Node.js</td><td>≥ 18.0.0</td><td>Рекомендуется LTS</td></tr>
-    <tr><td>npm</td><td>≥ 8</td><td>Идёт вместе с Node.js</td></tr>
-    <tr><td>ping</td><td>системный</td><td>На Windows встроен, на Linux пакет <code>iputils-ping</code></td></tr>
-    <tr><td>Дисковое место</td><td>~50 MB</td><td>+ данные: ~1 MB на 100 устройств за 30 дней</td></tr>
-    <tr><td>ОЗУ</td><td>~50–80 MB</td><td>RSS Node.js процесса в покое</td></tr>
-    <tr><td>ОС</td><td>Windows / Linux / macOS</td><td>Docker-образ на Alpine Linux</td></tr>
-  </table>
-</section>
-
-<!-- INSTALL -->
-<section id="install" class="section">
-  <div class="top-bar"><div class="breadcrumb">Docs / <span>Установка</span></div></div>
-  <h1>Установка</h1>
-  <p class="subtitle">Ручная установка на Windows или Linux/macOS без Docker.</p>
-
-  <h2>Windows (install.bat)</h2>
-  <p>Запустите <code>install.bat</code> от имени Администратора — скрипт сам установит зависимости, скомпилирует <code>better-sqlite3</code> и сгенерирует TLS-сертификат.</p>
-  <pre>install.bat        # от имени Администратора!</pre>
-  <div class="alert warning"><strong>⚠ better-sqlite3</strong> — нативный модуль, требует компиляции. Скрипт установит <code>windows-build-tools</code> и <code>node-gyp</code> автоматически. Если автоустановка не прошла — установите <a href="https://visualstudio.microsoft.com/visual-cpp-build-tools/" style="color:var(--accent)">Visual Studio Build Tools</a> вручную, затем запустите <code>npm rebuild better-sqlite3</code>.</div>
-
-  <h3>Ручной запуск (если скрипт не устраивает)</h3>
-  <pre>npm install
-node server.js</pre>
-
-  <h2>Linux / macOS (install.sh)</h2>
-  <pre>chmod +x install.sh
-./install.sh</pre>
-  <p>Скрипт определяет пакетный менеджер (apt / yum / brew) и устанавливает build-зависимости (<code>python3 make g++</code>) автоматически.</p>
-
-  <h2>Первый запуск</h2>
-  <p>При первом старте автоматически создаётся:</p>
-  <table>
-    <tr><th>Что</th><th>Где</th><th>Примечание</th></tr>
-    <tr><td>БД</td><td><code>data/netmonitor.db</code></td><td>SQLite WAL, схема + дефолтные категории</td></tr>
-    <tr><td>Пользователь</td><td>admin / admin</td><td>⚠ Смените пароль после первого входа</td></tr>
-    <tr><td>Секрет сессии</td><td><code>data/.session-secret</code></td><td>Генерируется один раз, не трогать</td></tr>
-    <tr><td>TLS-сертификат</td><td><code>data/certs/</code></td><td>Самоподписанный, генерируется <code>make-cert.bat/.sh</code></td></tr>
-  </table>
-
-  <div class="alert success"><strong>✓</strong> Сервер запущен: откройте <code>https://localhost:9222</code>. Браузер покажет предупреждение о самоподписанном сертификате — нажмите «Дополнительно» → «Перейти на сайт».</div>
-
-  <h2>Переменные окружения</h2>
-  <table>
-    <tr><th>Переменная</th><th>По умолчанию</th><th>Описание</th></tr>
-    <tr><td>PORT</td><td>9222</td><td>TCP-порт сервера</td></tr>
-    <tr><td>TLS_CERT_FILE</td><td>data/certs/cert.pem</td><td>Путь к TLS-сертификату</td></tr>
-    <tr><td>TLS_KEY_FILE</td><td>data/certs/key.pem</td><td>Путь к приватному ключу</td></tr>
-    <tr><td>COOKIE_SECURE</td><td>auto</td><td><code>true</code> — принудительно secure cookie (для HTTPS за прокси)</td></tr>
-    <tr><td>HTTP_REDIRECT_PORT</td><td>80</td><td>Порт для редиректа HTTP→HTTPS. <code>0</code> — отключить</td></tr>
-    <tr><td>METRICS_TOKEN</td><td>—</td><td>Bearer-токен для защиты <code>/metrics</code>. Пусто — открытый эндпоинт</td></tr>
-  </table>
-</section>
-
-<!-- DOCKER -->
-<section id="docker" class="section">
-  <div class="top-bar"><div class="breadcrumb">Docs / <span>Docker-деплой</span></div></div>
-  <h1>Docker-деплой</h1>
-  <p class="subtitle">Рекомендуемый способ для продакшн-серверов на Linux.</p>
-
-  <h2>Быстрый старт</h2>
-  <pre>git clone https://github.com/DarkyAndSparky/net-monitor.git
-cd net-monitor
-docker compose up -d</pre>
-  <p>Сервис поднимается на порту <code>9222</code>. Данные хранятся в <code>./data</code> (volume).</p>
-
-  <div class="alert info"><strong>network_mode: host</strong> — используется чтобы контейнер мог пинговать устройства локальной сети. На Windows Docker Desktop это не работает — Docker-образ предназначен для деплоя на Linux-сервер.</div>
-
-  <h2>docker-compose.yml</h2>
-  <pre>services:
-  net-monitor:
-    build: .
-    container_name: net-monitor
-    restart: unless-stopped
-    ports:
-      - "9222:9222"
-    volumes:
-      - ./data:/app/data
-    network_mode: host   # нужен для ping в локальной сети
-    cap_add:
-      - NET_RAW          # разрешает ping
-      - NET_ADMIN        # разрешает ARP</pre>
-
-  <h2>Сборка образа</h2>
-  <pre>docker build -t net-monitor .
-docker run -d --name net-monitor --network host   -v $(pwd)/data:/app/data   --cap-add NET_RAW --cap-add NET_ADMIN   net-monitor</pre>
-
-  <h2>Обновление</h2>
-  <pre>git pull
-docker compose build --no-cache
-docker compose up -d</pre>
-  <div class="alert success"><strong>Данные сохраняются</strong> — volume <code>./data</code> не пересоздаётся при обновлении контейнера.</div>
-
-  <h2>Переменные окружения в Docker</h2>
-  <pre>environment:
-  - PORT=9222
-  - METRICS_TOKEN=мой_секрет
-  - HTTP_REDIRECT_PORT=0   # отключить редирект если не нужен</pre>
-</section>
-
-<!-- CONFIG -->
-<section id="config" class="section">
-  <div class="top-bar"><div class="breadcrumb">Docs / <span>Настройка</span></div></div>
-  <h1>Настройка системы</h1>
-  <p class="subtitle">Все настройки хранятся в SQLite таблице <code>settings</code> и меняются через UI или API.</p>
-
-  <h2>Фиче-флаги</h2>
-  <p>Раздел Настройки → Функции. Все дополнительные модули выключены по умолчанию.</p>
-  <table>
-    <tr><th>Флаг</th><th>Что включает</th></tr>
-    <tr><td>snmp</td><td>SNMP-опрос устройств (OID, аптайм, CPU MikroTik)</td></tr>
-    <tr><td>portChecks</td><td>Проверка TCP-портов сервисов</td></tr>
-    <tr><td>incidents</td><td>Журнал инцидентов + эскалация алертов</td></tr>
-    <tr><td>auditLog</td><td>Аудит-лог всех действий пользователей</td></tr>
-  </table>
-
-  <h2>Интервалы мониторинга</h2>
-  <p>Глобальный интервал по умолчанию — 60 сек. Минимальный интервал — 10 сек. Задаётся индивидуально для каждого устройства в его карточке → поле «Интервал проверки».</p>
-  <div class="alert warning"><strong>⚠</strong> При большом числе устройств (<code>N</code>) и малом интервале (<code>I</code>) у сервера будет <code>N/I</code> одновременных ping-запросов. Для 500 устройств с интервалом 30 сек — ~17 пингов в секунду. Планировщик запускает новый тик каждые 5 сек и конкурентно не перегружает сеть, но учитывайте нагрузку на систему.</div>
-
-  <h2>TLS / HTTPS</h2>
-  <p>Если файлы <code>data/certs/cert.pem</code> и <code>data/certs/key.pem</code> существуют — сервер автоматически запускается по HTTPS. Для генерации самоподписанного сертификата:</p>
-  <pre>make-cert.bat    # Windows
-bash make-cert.sh  # Linux/macOS</pre>
-  <p>Для использования своего сертификата (Let's Encrypt и т.д.) — укажите пути через переменные окружения <code>TLS_CERT_FILE</code> и <code>TLS_KEY_FILE</code>.</p>
-</section>
-
-<!-- BACKUP -->
-<section id="backup" class="section">
-  <div class="top-bar"><div class="breadcrumb">Docs / <span>Бэкап и восстановление</span></div></div>
-  <h1>Бэкап и восстановление</h1>
-
-  <h2>Через UI</h2>
-  <p>Настройки → Резервная копия → кнопка «Скачать бэкап». Скачивается JSON-файл с полным дампом: устройства, категории, топология, настройки, инциденты, аудит (последние 5000 записей).</p>
-  <div class="alert danger"><strong>⚠ Восстановление полностью заменяет текущие данные.</strong> Перед восстановлением рекомендуется сохранить текущий бэкап.</div>
-
-  <h2>Через API</h2>
-  <pre># Скачать бэкап
-curl -s -b cookies.txt https://localhost:9222/api/backup -o backup.json
-
-# Восстановить
-curl -s -b cookies.txt -X POST https://localhost:9222/api/backup/restore \
-  -H "Content-Type: application/json" --data @backup.json</pre>
-
-  <h2>Прямой бэкап SQLite</h2>
-  <p>Файл <code>data/netmonitor.db</code> — обычный SQLite. Можно копировать напрямую (сервер должен быть остановлен, или использовать <code>sqlite3 .backup</code>).</p>
-  <pre># Горячая копия (сервер может работать)
-sqlite3 data/netmonitor.db ".backup data/netmonitor-backup.db"</pre>
-
-  <h2>Структура JSON-бэкапа</h2>
-  <pre>{
-  "version": 2,
-  "exportedAt": "2026-08-08T...",
-  "devices": { "devices": [...], "categories": [...] },
-  "users": { "users": [...] },
-  "settings": { "mikrotiks": [], "alerting": {}, "features": {}, ... },
-  "topology": { "edges": [...] },
-  "incidents": { "closed": [...] },
-  "audit": { "entries": [...] }
-}</pre>
-</section>
-
-<!-- ROLES -->
-<section id="roles" class="section">
-  <div class="top-bar"><div class="breadcrumb">Docs / <span>Роли и права</span></div></div>
-  <h1>Роли и права доступа</h1>
-
-  <h2>Роли</h2>
-  <div class="card">
-    <div class="role-row"><span class="role-name">admin</span><span class="role-perms">Полный доступ ко всему. Управление пользователями, настройки, интеграции, восстановление бэкапа.</span></div>
-    <div class="role-row"><span class="role-name">operator</span><span class="role-perms">Добавление и редактирование устройств, управление мониторингом и алертами, импорт из интеграций. Нельзя управлять пользователями и изменять системные настройки.</span></div>
-    <div class="role-row"><span class="role-name">viewer</span><span class="role-perms">Только чтение: просмотр устройств, карты, статусов, истории, отчётов. Никаких изменений.</span></div>
-  </div>
-
-  <h2>Матрица прав</h2>
-  <table>
-    <tr><th>Действие</th><th>admin</th><th>operator</th><th>viewer</th></tr>
-    <tr><td>Просмотр устройств / карты / статусов</td><td>✅</td><td>✅</td><td>✅</td></tr>
-    <tr><td>Экспорт CSV, скачать бэкап</td><td>✅</td><td>✅</td><td>✅</td></tr>
-    <tr><td>Добавление / редактирование устройств</td><td>✅</td><td>✅</td><td>❌</td></tr>
-    <tr><td>Удаление устройств</td><td>✅</td><td>✅</td><td>❌</td></tr>
-    <tr><td>Управление мониторингом (вкл/выкл)</td><td>✅</td><td>✅</td><td>❌</td></tr>
-    <tr><td>Настройка алертов</td><td>✅</td><td>✅</td><td>❌</td></tr>
-    <tr><td>Импорт из MikroTik / UniFi / Cisco</td><td>✅</td><td>✅</td><td>❌</td></tr>
-    <tr><td>Добавление интеграций (роутеры, контроллеры)</td><td>✅</td><td>❌</td><td>❌</td></tr>
-    <tr><td>Управление пользователями</td><td>✅</td><td>❌</td><td>❌</td></tr>
-    <tr><td>Системные настройки, брендинг</td><td>✅</td><td>❌</td><td>❌</td></tr>
-    <tr><td>Восстановление из бэкапа</td><td>✅</td><td>❌</td><td>❌</td></tr>
-    <tr><td>Просмотр аудит-лога</td><td>✅</td><td>❌</td><td>❌</td></tr>
-  </table>
-
-  <h2>Управление пользователями</h2>
-  <p>Настройки → Пользователи. Создание, смена роли, удаление. Нельзя удалить последнего администратора и нельзя удалить самого себя.</p>
-  <div class="alert info"><strong>Пароль по умолчанию:</strong> <code>admin / admin</code>. Смените немедленно после первого входа через Настройки → Сменить пароль.</div>
-</section>
-
-<!-- INTEGRATIONS -->
-<section id="integrations" class="section">
-  <div class="top-bar"><div class="breadcrumb">Docs / <span>Интеграции</span></div></div>
-  <h1>Интеграции</h1>
-
-  <h2>MikroTik RouterOS API</h2>
-  <p>Настройки → Интеграции → MikroTik. Добавьте роутер (хост, порт 8728, логин/пароль). Доступные операции:</p>
-  <table>
-    <tr><th>Операция</th><th>Что делает</th></tr>
-    <tr><td>Импорт DHCP-leases</td><td>Тянет список аренд DHCP, добавляет новые устройства, обновляет IP/MAC существующих</td></tr>
-    <tr><td>ARP-таблица</td><td>Список устройств из ARP-таблицы роутера с указанием интерфейса</td></tr>
-    <tr><td>MNDP-соседи</td><td>Обнаружение MikroTik-устройств через neighbor discovery</td></tr>
-    <tr><td>Автотопология</td><td>Строит связи на карте из neighbor-таблицы + ARP (вкладка Обнаружение)</td></tr>
-  </table>
-  <div class="alert info">Для подключения по TLS укажите порт <code>8729</code> и включите галочку «Использовать TLS».</div>
-
-  <h2>UniFi Controller</h2>
-  <p>Поддерживаются UniFi Network Application и UniFi OS (UDM/UDR). При добавлении включите галочку «UniFi OS» для современных устройств. Импортирует инфраструктуру (UAP, USW, UGW) и клиентов.</p>
-  <div class="alert warning"><strong>Самоподписанный сертификат UniFi</strong> — соединение устанавливается с отключённой проверкой сертификата (<code>rejectUnauthorized: false</code>). Используйте только в доверенной сети.</div>
-
-  <h2>Cisco SSH</h2>
-  <p>Подключается по SSH, выполняет <code>show ip arp</code> и парсит ARP-таблицу. Поддерживаются старые алгоритмы шифрования (IOS 12.x+). Импортированные устройства получают категорию «workstation», тип «DHCP Client».</p>
-
-  <h2>OUI (производители по MAC)</h2>
-  <p>База производителей скачивается с <code>standards-oui.ieee.org</code> при первом запуске и обновляется раз в 30 дней. Раздел Настройки → OUI → «Обновить сейчас» для принудительного обновления.</p>
-</section>
-
-<!-- ALERTS -->
-<section id="alerts" class="section">
-  <div class="top-bar"><div class="breadcrumb">Docs / <span>Алерты и уведомления</span></div></div>
-  <h1>Алерты и уведомления</h1>
-
-  <h2>Настройка</h2>
-  <p>Настройки → Алерты. Включите «Алерты активны» и настройте хотя бы один канал доставки.</p>
-
-  <h2>Telegram Bot</h2>
-  <pre># 1. Создайте бота через @BotFather, получите токен
-# 2. Узнайте chat_id: отправьте боту любое сообщение, затем:
-curl https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates
-# В ответе найдите "chat":{"id": ...}</pre>
-  <p>Введите токен и chat_id в настройках. Кнопка «Тест» отправит пробное сообщение.</p>
-
-  <h2>Webhook</h2>
-  <p>POST-запрос на указанный URL с JSON-телом:</p>
-  <pre>{
-  "device": { "id": "d-...", "name": "router-01", "ip": "192.168.1.1", "location": "Серверная" },
-  "status": "down",          // "down" | "up" | "test"
-  "message": "🔴 router-01 недоступно\nIP: 192.168.1.1",
-  "time": "2026-08-08T10:00:00.000Z"
-}</pre>
-
-  <h2>Параметры алертов</h2>
-  <table>
-    <tr><th>Параметр</th><th>Описание</th></tr>
-    <tr><td>Порог срабатывания</td><td>Сколько подряд неудачных проверок до отправки алерта (по умолчанию 2)</td></tr>
-    <tr><td>Повтор (мин)</td><td>Повторять алерт пока устройство offline. 0 — только один раз</td></tr>
-    <tr><td>Уведомить о восстановлении</td><td>Отправить сообщение когда устройство снова онлайн</td></tr>
-  </table>
-
-  <h2>Эскалация (требует модуль «Инциденты»)</h2>
-  <p>Если устройство недоступно дольше N минут — отправляет отдельное сообщение на другой Telegram chat_id (например, дежурному руководителю). Инцидент помечается флагом «escalated».</p>
-
-  <h2>Алерты на устройство</h2>
-  <p>В карточке каждого устройства есть галочка «Алерты». Снимите её чтобы исключить конкретное устройство из системы уведомлений, оставив его под мониторингом.</p>
-</section>
-
-<!-- ARCH -->
-<section id="arch" class="section">
-  <div class="top-bar"><div class="breadcrumb">Docs / <span>Архитектура</span></div></div>
-  <h1>Архитектура</h1>
-
-  <h2>Структура проекта</h2>
-  <div class="file-tree">
-<span class="dir">net-monitor/</span>
-├── server.js                   <span class="comment"># Точка входа — только запуск (~70 строк)</span>
-├── package.json
-├── Dockerfile / docker-compose.yml
-├── install.bat / install.sh
-│
-├── <span class="dir">src/</span>
-│   ├── <span class="dir">db/</span>
-│   │   └── index.js            <span class="comment"># SQLite: схема, миграции, настройки, сжатие истории</span>
-│   ├── <span class="dir">middleware/</span>
-│   │   └── auth.js             <span class="comment"># requireAuth / requireAdmin / requireOperator / logAudit</span>
-│   ├── <span class="dir">routes/</span>
-│   │   ├── auth.js             <span class="comment"># /api/login, /api/users, /api/change-password</span>
-│   │   ├── devices.js          <span class="comment"># /api/devices, /api/categories, CSV</span>
-│   │   ├── monitoring.js       <span class="comment"># /api/status, /api/history, /api/uptime, алерты, инциденты</span>
-│   │   ├── integrations.js     <span class="comment"># MikroTik, UniFi, Cisco, OUI</span>
-│   │   ├── discovery.js        <span class="comment"># ping sweep, топология, подсети</span>
-│   │   ├── settings.js         <span class="comment"># брендинг, бэкап/восстановление</span>
-│   │   ├── metrics.js          <span class="comment"># GET /metrics — Prometheus exporter</span>
-│   │   └── sse.js              <span class="comment"># GET /api/events — Server-Sent Events</span>
-│   └── <span class="dir">services/</span>
-│       └── scheduler.js        <span class="comment"># Планировщик пингов, SNMP, алерты, инциденты</span>
-│
-├── <span class="dir">public/</span>                     <span class="comment"># Статика (SPA)</span>
-│   ├── index.html
-│   ├── app.js                  <span class="comment"># Весь фронтенд (~2300 строк)</span>
-│   ├── style.css
-│   └── favicon.svg
-│
-└── <span class="dir">data/</span>                       <span class="comment"># Runtime данные (в .gitignore)</span>
-    ├── netmonitor.db           <span class="comment"># SQLite база</span>
-    ├── .session-secret
-    ├── oui.json                <span class="comment"># Кэш базы производителей</span>
-    └── certs/                  <span class="comment"># TLS сертификаты</span>
-  </div>
-
-  <h2>Поток данных</h2>
-  <div class="arch-box">Браузер → HTTPS → Express.js → Middleware (auth) → Route handler → SQLite (better-sqlite3)</div>
-  <div class="arch-arrow">↕</div>
-  <div class="arch-box">scheduler.js (setInterval 5сек) → ping → statusCache → SSE broadcast → браузер (без F5)</div>
-  <div class="arch-arrow">↕</div>
-  <div class="arch-box">Компрессия истории (раз в час): сырые записи → 5-мин → часовые → дневные агрегаты</div>
-
-  <h2>SSE-поток событий</h2>
-  <table>
-    <tr><th>Событие</th><th>Когда</th><th>Данные</th></tr>
-    <tr><td>snapshot</td><td>При первом подключении</td><td>Массив текущих статусов всех устройств</td></tr>
-    <tr><td>status</td><td>При смене online/offline</td><td><code>{"id":"d-...","online":true,"lastChecked":...}</code></td></tr>
-    <tr><td>incident</td><td>Открытие/закрытие инцидента</td><td><code>{"type":"open","deviceName":"..."}</code></td></tr>
-    <tr><td>ping</td><td>Каждые 25 сек (keepalive)</td><td><code>{"ts":...}</code></td></tr>
-  </table>
-</section>
-
-<!-- STACK -->
-<section id="stack" class="section">
-  <div class="top-bar"><div class="breadcrumb">Docs / <span>Стек и зависимости</span></div></div>
-  <h1>Стек и зависимости</h1>
-
-  <h2>Бэкенд</h2>
-  <table>
-    <tr><th>Пакет</th><th>Версия</th><th>Назначение</th></tr>
-    <tr><td>express</td><td>^4.19</td><td>HTTP-сервер, роутинг</td></tr>
-    <tr><td>express-session</td><td>^1.18</td><td>Сессии (in-memory)</td></tr>
-    <tr><td>better-sqlite3</td><td>^9.4</td><td>SQLite — синхронный драйвер, WAL, без отдельного процесса</td></tr>
-    <tr><td>node-routeros</td><td>^1.6</td><td>MikroTik RouterOS API</td></tr>
-    <tr><td>net-snmp</td><td>^3.0</td><td>SNMP v1/v2c опрос (опционально)</td></tr>
-    <tr><td>ssh2</td><td>^1.15</td><td>Cisco SSH подключение (опционально)</td></tr>
-  </table>
-
-  <h2>Фронтенд</h2>
-  <table>
-    <tr><th>Технология</th><th>Примечание</th></tr>
-    <tr><td>Vanilla JS (ES2020+)</td><td>Без фреймворков, без сборщика — один app.js файл</td></tr>
-    <tr><td>SVG карта</td><td>Вся карта рисуется в SVG через innerHTML — drag, zoom, анимации</td></tr>
-    <tr><td>Tabler Icons</td><td>SVG-иконки через CDN (webfont)</td></tr>
-    <tr><td>EventSource (SSE)</td><td>Нативный браузерный API, поддерживается всеми современными браузерами</td></tr>
-    <tr><td>CSS Variables</td><td>Вся тема через CSS-переменные, тёмная/светлая тема без JS</td></tr>
-  </table>
-
-  <div class="alert info"><strong>better-sqlite3</strong> — нативный модуль (C++), требует компиляции при установке. Это единственная нестандартная зависимость установки. В Docker-образе компилируется при сборке — никаких проблем на продакшне.</div>
-</section>
-
-<!-- DB SCHEMA -->
-<section id="db-schema" class="section">
-  <div class="top-bar"><div class="breadcrumb">Docs / <span>Схема БД</span></div></div>
-  <h1>Схема БД (SQLite)</h1>
-  <p class="subtitle">Файл: <code>data/netmonitor.db</code>. WAL-режим, foreign keys ON.</p>
-
-  <h2>Таблица: devices</h2>
-  <div class="card">
-    <div class="schema-field"><span class="schema-key">id</span><span class="schema-type">TEXT PK</span><span class="schema-note">UUID с префиксом «d-»</span></div>
-    <div class="schema-field"><span class="schema-key">name</span><span class="schema-type">TEXT</span><span class="schema-note">Отображаемое имя устройства</span></div>
-    <div class="schema-field"><span class="schema-key">ip</span><span class="schema-type">TEXT</span><span class="schema-note">IPv4 адрес</span></div>
-    <div class="schema-field"><span class="schema-key">mac</span><span class="schema-type">TEXT</span><span class="schema-note">MAC-адрес в формате XX:XX:XX:XX:XX:XX</span></div>
-    <div class="schema-field"><span class="schema-key">location</span><span class="schema-type">TEXT</span><span class="schema-note">Расположение (свободный текст)</span></div>
-    <div class="schema-field"><span class="schema-key">type</span><span class="schema-type">TEXT</span><span class="schema-note">Тип устройства (Router, Switch, Camera...)</span></div>
-    <div class="schema-field"><span class="schema-key">category_id</span><span class="schema-type">TEXT</span><span class="schema-note">FK → categories.id</span></div>
-    <div class="schema-field"><span class="schema-key">is_key</span><span class="schema-type">INTEGER</span><span class="schema-note">0/1 — ключевое устройство (отображается на дашборде)</span></div>
-    <div class="schema-field"><span class="schema-key">monitored</span><span class="schema-type">INTEGER</span><span class="schema-note">0/1 — пинговать или нет</span></div>
-    <div class="schema-field"><span class="schema-key">check_interval</span><span class="schema-type">INTEGER</span><span class="schema-note">Интервал проверки в секундах (мин: 10)</span></div>
-    <div class="schema-field"><span class="schema-key">alerts_enabled</span><span class="schema-type">INTEGER</span><span class="schema-note">0/1 — отправлять алерты для этого устройства</span></div>
-    <div class="schema-field"><span class="schema-key">snmp_enabled</span><span class="schema-type">INTEGER</span><span class="schema-note">0/1 — опрашивать по SNMP</span></div>
-    <div class="schema-field"><span class="schema-key">snmp_community</span><span class="schema-type">TEXT</span><span class="schema-note">SNMP community string (по умолчанию «public»)</span></div>
-    <div class="schema-field"><span class="schema-key">snmp_port</span><span class="schema-type">INTEGER</span><span class="schema-note">SNMP порт (по умолчанию 161)</span></div>
-    <div class="schema-field"><span class="schema-key">port_checks</span><span class="schema-type">TEXT (JSON)</span><span class="schema-note">Массив [{port, label}] для TCP-проверок</span></div>
-    <div class="schema-field"><span class="schema-key">x, y</span><span class="schema-type">REAL</span><span class="schema-note">Позиция на SVG-карте</span></div>
-    <div class="schema-field"><span class="schema-key">source</span><span class="schema-type">TEXT</span><span class="schema-note">Откуда создано: manual / csv-import / mikrotik:... / unifi:...</span></div>
-    <div class="schema-field"><span class="schema-key">created_at, updated_at</span><span class="schema-type">INTEGER</span><span class="schema-note">Unix timestamp (мс)</span></div>
-  </div>
-
-  <h2>Таблица: history</h2>
-  <div class="card">
-    <div class="schema-field"><span class="schema-key">id</span><span class="schema-type">INTEGER PK</span><span class="schema-note">Autoincrement</span></div>
-    <div class="schema-field"><span class="schema-key">device_id</span><span class="schema-type">TEXT</span><span class="schema-note">FK → devices.id (CASCADE DELETE)</span></div>
-    <div class="schema-field"><span class="schema-key">ts</span><span class="schema-type">INTEGER</span><span class="schema-note">Timestamp проверки (мс). Индекс по (device_id, ts)</span></div>
-    <div class="schema-field"><span class="schema-key">online</span><span class="schema-type">INTEGER</span><span class="schema-note">0 или 1. При агрегации — среднее (≥0.5 → 1)</span></div>
-  </div>
-  <div class="alert info"><strong>Автосжатие истории</strong> — раз в час: данные старше 2ч агрегируются в 5-мин интервалы, старше 7д — в часовые, старше 30д — в дневные. Размер БД стабилизируется вне зависимости от числа устройств и времени работы.</div>
-
-  <h2>Таблица: incidents</h2>
-  <div class="card">
-    <div class="schema-field"><span class="schema-key">id</span><span class="schema-type">TEXT PK</span><span class="schema-note">UUID с префиксом «i-»</span></div>
-    <div class="schema-field"><span class="schema-key">device_id</span><span class="schema-type">TEXT</span><span class="schema-note">ID устройства</span></div>
-    <div class="schema-field"><span class="schema-key">device_name</span><span class="schema-type">TEXT</span><span class="schema-note">Имя на момент инцидента (денормализовано)</span></div>
-    <div class="schema-field"><span class="schema-key">start_ts</span><span class="schema-type">INTEGER</span><span class="schema-note">Начало инцидента (мс)</span></div>
-    <div class="schema-field"><span class="schema-key">end_ts</span><span class="schema-type">INTEGER</span><span class="schema-note">Конец инцидента (мс). NULL = открытый</span></div>
-    <div class="schema-field"><span class="schema-key">duration_sec</span><span class="schema-type">INTEGER</span><span class="schema-note">Длительность в секундах (заполняется при закрытии)</span></div>
-    <div class="schema-field"><span class="schema-key">escalated</span><span class="schema-type">INTEGER</span><span class="schema-note">0/1 — был ли отправлен алерт эскалации</span></div>
-  </div>
-
-  <h2>Таблица: settings</h2>
-  <div class="card">
-    <div class="schema-field"><span class="schema-key">key</span><span class="schema-type">TEXT PK</span><span class="schema-note">Ключ: alerting, features, branding, mikrotiks, ...</span></div>
-    <div class="schema-field"><span class="schema-key">value</span><span class="schema-type">TEXT (JSON)</span><span class="schema-note">JSON-сериализованное значение</span></div>
-  </div>
-</section>
-
-<!-- SSE -->
-<section id="sse" class="section">
-  <div class="top-bar"><div class="breadcrumb">Docs / <span>SSE / Реалтайм</span></div></div>
-  <h1>Server-Sent Events</h1>
-  <p class="subtitle">Живые обновления статусов без перезагрузки страницы.</p>
-
-  <h2>Эндпоинт</h2>
-  <pre>GET /api/events
-Authorization: сессионный cookie (требует входа)</pre>
-
-  <h2>Как работает</h2>
-  <p>После логина браузер подключается к <code>/api/events</code> через нативный <code>EventSource</code>. Сервер держит соединение открытым и пушит события при изменении данных. При разрыве — автоматическое переподключение через 5 сек.</p>
-
-  <h2>События</h2>
-  <table>
-    <tr><th>event</th><th>Когда</th><th>data</th></tr>
-    <tr><td>snapshot</td><td>Сразу при подключении</td><td>Массив текущих статусов: <code>[{"id":"d-...","online":true,"lastChecked":...}]</code></td></tr>
-    <tr><td>status</td><td>При смене online↔offline</td><td><code>{"id":"d-...","online":false,"lastChecked":1234...}</code></td></tr>
-    <tr><td>incident</td><td>Открытие/закрытие инцидента</td><td><code>{"type":"open","deviceId":"...","deviceName":"..."}</code></td></tr>
-    <tr><td>ping</td><td>Каждые 25 сек</td><td><code>{"ts":1234...}</code> — keepalive</td></tr>
-  </table>
-
-  <h2>Реакция фронтенда</h2>
-  <table>
-    <tr><th>Событие</th><th>Что обновляется</th></tr>
-    <tr><td>snapshot</td><td>Полная перерисовка дашборда, таблиц, карты</td></tr>
-    <tr><td>status</td><td>Только кольцо нужного узла на SVG-карте + строка в таблице мониторинга + счётчики дашборда</td></tr>
-    <tr><td>incident</td><td>Toast-уведомление в браузере</td></tr>
-  </table>
-
-  <h2>Защита от перегрузки</h2>
-  <p>SSE генерирует событие только при смене статуса (<code>prev.online !== online</code>), а не при каждом тике планировщика. При N устройствах с интервалом T — максимум N/T событий в секунду, обычно значительно меньше.</p>
-</section>
-
-<!-- METRICS -->
-<section id="metrics" class="section">
-  <div class="top-bar"><div class="breadcrumb">Docs / <span>Prometheus /metrics</span></div></div>
-  <h1>Prometheus /metrics</h1>
-
-  <h2>Эндпоинт</h2>
-  <pre>GET /metrics
-Content-Type: text/plain; version=0.0.4</pre>
-  <p>Формат: Prometheus text exposition v0.0.4. Без авторизации по умолчанию. Для защиты — переменная окружения <code>METRICS_TOKEN</code>.</p>
-
-  <h2>Метрики</h2>
-  <table>
-    <tr><th>Метрика</th><th>Тип</th><th>Описание</th></tr>
-    <tr><td>netmonitor_build_info</td><td>gauge</td><td>Версия приложения (лейбл version)</td></tr>
-    <tr><td>netmonitor_devices_total</td><td>gauge</td><td>Всего устройств в реестре</td></tr>
-    <tr><td>netmonitor_devices_monitored_total</td><td>gauge</td><td>Устройств под мониторингом</td></tr>
-    <tr><td>netmonitor_devices_online_total</td><td>gauge</td><td>Устройств онлайн прямо сейчас</td></tr>
-    <tr><td>netmonitor_devices_offline_total</td><td>gauge</td><td>Устройств оффлайн прямо сейчас</td></tr>
-    <tr><td>netmonitor_device_up</td><td>gauge</td><td>1/0 для каждого устройства (лейблы: id, name, ip, category, location)</td></tr>
-    <tr><td>netmonitor_device_uptime_pct_24h</td><td>gauge</td><td>Аптайм за последние 24ч в %</td></tr>
-    <tr><td>netmonitor_device_uptime_pct_7d</td><td>gauge</td><td>Аптайм за последние 7 дней в %</td></tr>
-    <tr><td>netmonitor_incidents_open_total</td><td>gauge</td><td>Открытых инцидентов сейчас</td></tr>
-    <tr><td>netmonitor_incidents_total_24h</td><td>gauge</td><td>Инцидентов закрытых за последние 24ч</td></tr>
-    <tr><td>netmonitor_server_uptime_seconds</td><td>gauge</td><td>Аптайм Node.js процесса в секундах</td></tr>
-  </table>
-
-  <h2>Prometheus scrape config</h2>
-  <pre>scrape_configs:
-  - job_name: 'net-monitor'
-    scrape_interval: 30s
-    static_configs:
-      - targets: ['192.168.1.100:9222']
-    # Если включена защита токеном:
-    # bearer_token: 'мой_секрет'</pre>
-
-  <h2>Пример Grafana Dashboard (PromQL)</h2>
-  <pre># Процент онлайн устройств
-netmonitor_devices_online_total / netmonitor_devices_monitored_total * 100
-
-# Устройства с аптаймом < 99% за 24ч
-netmonitor_device_uptime_pct_24h < 99
-
-# Топ-5 проблемных устройств
-sort(netmonitor_device_uptime_pct_7d)[5:]</pre>
-</section>
-
-<!-- CONTRIB -->
-<section id="contrib" class="section">
-  <div class="top-bar"><div class="breadcrumb">Docs / <span>Разработка</span></div></div>
-  <h1>Разработка и контрибьюшн</h1>
-
-  <h2>Локальный запуск</h2>
-  <pre>git clone https://github.com/DarkyAndSparky/net-monitor.git
-cd net-monitor
-git checkout dev        # вся работа в ветке dev
-npm install
-node server.js          # http://localhost:9222</pre>
-
-  <h2>Ветки</h2>
-  <table>
-    <tr><th>Ветка</th><th>Назначение</th></tr>
-    <tr><td>main</td><td>Стабильные релизы. Прямые коммиты запрещены — только merge из dev через PR.</td></tr>
-    <tr><td>dev</td><td>Текущая разработка. Все изменения сюда.</td></tr>
-  </table>
-
-  <h2>Выпуск новой версии</h2>
-  <pre>git checkout main
-git merge dev
-git push
-git tag v1.0.0
-git push origin v1.0.0   # GitHub Actions автоматически создаст Release с zip</pre>
-
-  <h2>Префиксы коммитов</h2>
-  <table>
-    <tr><th>Префикс</th><th>Когда</th></tr>
-    <tr><td>feat:</td><td>Новая функция</td></tr>
-    <tr><td>fix:</td><td>Исправление бага</td></tr>
-    <tr><td>ui:</td><td>Изменения интерфейса</td></tr>
-    <tr><td>refactor:</td><td>Рефакторинг без изменения поведения</td></tr>
-    <tr><td>docs:</td><td>Документация</td></tr>
-    <tr><td>chore:</td><td>Зависимости, конфиги, инфраструктура</td></tr>
-  </table>
-
-  <h2>Добавление нового роута</h2>
-  <pre>// 1. Создать src/routes/myroute.js
-const express = require('express');
-const router = express.Router();
-const { db } = require('../db');
-const { requireAuth } = require('../middleware/auth');
-
-router.get('/my-endpoint', requireAuth, (req, res) => {
-  res.json({ ok: true });
-});
-module.exports = router;
-
-// 2. Подключить в server.js:
-app.use('/api', require('./src/routes/myroute'));</pre>
-
-  <h2>GitHub Actions</h2>
-  <p>При пуше тега <code>v*</code> автоматически запускается <code>.github/workflows/release.yml</code> — собирает zip-архив проекта (без <code>data/</code>, <code>node_modules/</code>, <code>certs/</code>) и публикует как GitHub Release.</p>
-</section>
-
-<!-- API AUTH -->
-<section id="api-auth" class="section">
-  <div class="top-bar"><div class="breadcrumb">Docs / API / <span>Auth</span></div></div>
-  <h1>API — Auth</h1>
-
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method POST">POST</span><span class="endpoint-path">/api/login</span>
-      <span class="endpoint-desc">Вход в систему</span>
-    </div>
-    <div class="endpoint-body">
-      <h4>Body</h4><pre>{ "username": "admin", "password": "admin" }</pre>
-      <h4>Response 200</h4><pre>{ "ok": true, "username": "admin", "role": "admin" }</pre>
-      <h4>Response 401</h4><pre>{ "error": "invalid_credentials" }</pre>
-      <h4>Response 429</h4><pre>{ "error": "too_many_attempts", "message": "Повторите через ~5 мин." }</pre>
-      <p>После 5 неудачных попыток с одного IP — блокировка на 5 минут.</p>
-    </div>
-  </div>
-
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method POST">POST</span><span class="endpoint-path">/api/logout</span>
-      <span class="endpoint-desc">Завершение сессии</span>
-    </div>
-    <div class="endpoint-body">
-      <h4>Response 200</h4><pre>{ "ok": true }</pre>
-    </div>
-  </div>
-
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method GET">GET</span><span class="endpoint-path">/api/me</span>
-      <span class="endpoint-desc">Текущий пользователь</span><span class="auth-badge">auth</span>
-    </div>
-    <div class="endpoint-body">
-      <h4>Response 200</h4><pre>{ "username": "admin", "role": "admin" }</pre>
-    </div>
-  </div>
-
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method POST">POST</span><span class="endpoint-path">/api/change-password</span>
-      <span class="endpoint-desc">Смена пароля</span><span class="auth-badge">auth</span>
-    </div>
-    <div class="endpoint-body">
-      <h4>Body</h4><pre>{ "currentPassword": "...", "newPassword": "..." }</pre>
-      <p>Минимальная длина нового пароля — 8 символов.</p>
-    </div>
-  </div>
-
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method GET">GET</span><span class="endpoint-path">/api/users</span>
-      <span class="endpoint-desc">Список пользователей</span><span class="admin-badge">admin</span>
-    </div>
-    <div class="endpoint-body">
-      <h4>Response 200</h4><pre>[{ "username": "admin", "role": "admin" }, ...]</pre>
-    </div>
-  </div>
-
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method POST">POST</span><span class="endpoint-path">/api/users</span>
-      <span class="endpoint-desc">Создание пользователя</span><span class="admin-badge">admin</span>
-    </div>
-    <div class="endpoint-body">
-      <h4>Body</h4><pre>{ "username": "john", "password": "...", "role": "operator" }</pre>
-      <p>Роли: <code>admin</code>, <code>operator</code>, <code>viewer</code>.</p>
-    </div>
-  </div>
-
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method DELETE">DELETE</span><span class="endpoint-path">/api/users/:username</span>
-      <span class="endpoint-desc">Удаление пользователя</span><span class="admin-badge">admin</span>
-    </div>
-    <div class="endpoint-body">
-      <p>Нельзя удалить самого себя и последнего администратора.</p>
-    </div>
-  </div>
-</section>
-
-<!-- API DEVICES -->
-<section id="api-devices" class="section">
-  <div class="top-bar"><div class="breadcrumb">Docs / API / <span>Devices</span></div></div>
-  <h1>API — Devices</h1>
-
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method GET">GET</span><span class="endpoint-path">/api/devices</span>
-      <span class="endpoint-desc">Список всех устройств</span><span class="auth-badge">auth</span>
-    </div>
-    <div class="endpoint-body">
-      <h4>Response 200</h4>
-      <pre>[{
-  "id": "d-uuid", "name": "router-01", "ip": "192.168.1.1",
-  "mac": "AA:BB:CC:DD:EE:FF", "location": "Серверная",
-  "type": "Router", "category": "network",
-  "key": true, "monitored": true, "checkInterval": 60,
-  "alertsEnabled": true, "source": "manual",
-  "snmp": { "enabled": false, "community": "public", "port": 161 },
-  "portChecks": [], "x": 300, "y": 200,
-  "vendor": "Mikrotikls SIA"
-}]</pre>
-    </div>
-  </div>
-
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method POST">POST</span><span class="endpoint-path">/api/devices</span>
-      <span class="endpoint-desc">Добавить устройство</span><span class="op-badge">operator</span>
-    </div>
-    <div class="endpoint-body">
-      <h4>Body (все поля опциональны кроме нет обязательных — дефолты применяются)</h4>
-      <pre>{
-  "name": "router-01", "ip": "192.168.1.1", "mac": "",
-  "location": "", "type": "Router", "category": "network",
-  "comment": "", "key": false, "monitored": true,
-  "checkInterval": 60, "alertsEnabled": true,
-  "snmp": { "enabled": false, "community": "public", "port": 161 },
-  "portChecks": [{ "port": 80, "label": "HTTP" }]
-}</pre>
-    </div>
-  </div>
-
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method PUT">PUT</span><span class="endpoint-path">/api/devices/:id</span>
-      <span class="endpoint-desc">Обновить устройство (partial update)</span><span class="op-badge">operator</span>
-    </div>
-    <div class="endpoint-body">
-      <p>Передавайте только изменяемые поля. Поля <code>x</code>, <code>y</code> — позиция на карте, не пишутся в аудит-лог (drag не считается «изменением»).</p>
-    </div>
-  </div>
-
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method DELETE">DELETE</span><span class="endpoint-path">/api/devices/:id</span>
-      <span class="endpoint-desc">Удалить устройство</span><span class="op-badge">operator</span>
-    </div>
-    <div class="endpoint-body">
-      <p>Каскадно удаляет историю пингов устройства из таблицы <code>history</code>.</p>
-    </div>
-  </div>
-
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method POST">POST</span><span class="endpoint-path">/api/devices/bulk-delete</span>
-      <span class="endpoint-desc">Массовое удаление</span><span class="op-badge">operator</span>
-    </div>
-    <div class="endpoint-body">
-      <h4>Body</h4><pre>{ "ids": ["d-uuid1", "d-uuid2"] }</pre>
-    </div>
-  </div>
-
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method POST">POST</span><span class="endpoint-path">/api/devices/bulk-update</span>
-      <span class="endpoint-desc">Массовое изменение полей</span><span class="op-badge">operator</span>
-    </div>
-    <div class="endpoint-body">
-      <h4>Body</h4><pre>{ "ids": ["d-uuid1"], "patch": { "category": "server", "monitored": true } }</pre>
-      <p>Допустимые поля patch: <code>category</code>, <code>monitored</code>, <code>alertsEnabled</code>, <code>key</code>, <code>checkInterval</code>, <code>location</code>.</p>
-    </div>
-  </div>
-
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method GET">GET</span><span class="endpoint-path">/api/devices/export.csv</span>
-      <span class="endpoint-desc">Экспорт в CSV (UTF-8 BOM)</span><span class="auth-badge">auth</span>
-    </div>
-    <div class="endpoint-body">
-      <p>Колонки: name, ip, mac, location, type, category, comment, monitored, key.</p>
-    </div>
-  </div>
-
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method POST">POST</span><span class="endpoint-path">/api/devices/import-csv</span>
-      <span class="endpoint-desc">Импорт из CSV</span><span class="op-badge">operator</span>
-    </div>
-    <div class="endpoint-body">
-      <h4>Body</h4><pre>{ "csv": "name,ip,mac,category\nrouter-01,192.168.1.1,,network\n..." }</pre>
-      <h4>Response 200</h4><pre>{ "ok": true, "created": 5, "skipped": 2 }</pre>
-      <p>Обязательные колонки: <code>name</code>, <code>ip</code>. Устройства с совпадающим IP пропускаются.</p>
-    </div>
-  </div>
-
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method GET">GET</span><span class="endpoint-path">/api/categories</span>
-      <span class="endpoint-desc">Список категорий</span><span class="auth-badge">auth</span>
-    </div>
-    <div class="endpoint-body">
-      <h4>Response 200</h4><pre>[{ "id": "network", "name": "Сетевое оборудование", "color": "#3b82f6", "sort": 1 }]</pre>
-    </div>
-  </div>
-</section>
-
-<!-- API MONITORING -->
-<section id="api-monitoring" class="section">
-  <div class="top-bar"><div class="breadcrumb">Docs / API / <span>Monitoring</span></div></div>
-  <h1>API — Monitoring</h1>
-
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method GET">GET</span><span class="endpoint-path">/api/status</span>
-      <span class="endpoint-desc">Текущий статус всех устройств (из кэша)</span><span class="auth-badge">auth</span>
-    </div>
-    <div class="endpoint-body">
-      <h4>Response 200</h4>
-      <pre>[{
-  "id": "d-uuid", "ip": "192.168.1.1",
-  "monitored": true, "online": true,
-  "lastChecked": 1723114800000,
-  "snmp": null,
-  "ports": [{ "port": 80, "label": "HTTP", "open": true, "lastChecked": ... }]
-}]</pre>
-    </div>
-  </div>
-
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method POST">POST</span><span class="endpoint-path">/api/status/:id/check</span>
-      <span class="endpoint-desc">Немедленная проверка устройства</span><span class="auth-badge">auth</span>
-    </div>
-    <div class="endpoint-body">
-      <h4>Response 200</h4><pre>{ "id": "d-uuid", "online": true, "lastChecked": 1723114800000 }</pre>
-    </div>
-  </div>
-
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method GET">GET</span><span class="endpoint-path">/api/history/:id?range=24h</span>
-      <span class="endpoint-desc">История пингов устройства</span><span class="auth-badge">auth</span>
-    </div>
-    <div class="endpoint-body">
-      <p>Параметр <code>range</code>: <code>24h</code> (по умолчанию) или <code>7d</code>.</p>
-      <h4>Response 200</h4><pre>[{ "t": 1723114800000, "online": true }, ...]</pre>
-    </div>
-  </div>
-
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method GET">GET</span><span class="endpoint-path">/api/uptime</span>
-      <span class="endpoint-desc">Аптайм всех мониторируемых устройств</span><span class="auth-badge">auth</span>
-    </div>
-    <div class="endpoint-body">
-      <h4>Response 200</h4>
-      <pre>{
-  "d-uuid": {
-    "uptime24h": 99.8,    // % или null если нет данных
-    "uptime7d":  98.5,
-    "samples": [{ "t": ..., "online": true }, ...]  // последние 30 точек
-  }
-}</pre>
-    </div>
-  </div>
-
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method GET">GET</span><span class="endpoint-path">/api/incidents</span>
-      <span class="endpoint-desc">Список инцидентов</span><span class="auth-badge">auth</span>
-    </div>
-    <div class="endpoint-body">
-      <p>Требует фиче-флаг <code>incidents: true</code>. Параметр <code>?limit=200</code> для закрытых.</p>
-      <h4>Response 200</h4>
-      <pre>{
-  "open": [{ "deviceId": "...", "deviceName": "...", "start": ..., "end": null, "durationSec": 120, "escalated": false }],
-  "closed": [...]
-}</pre>
-    </div>
-  </div>
-
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method GET">GET</span><span class="endpoint-path">/api/audit-log?page=1&pageSize=50</span>
-      <span class="endpoint-desc">Аудит-лог действий</span><span class="admin-badge">admin</span>
-    </div>
-    <div class="endpoint-body">
-      <p>Требует фиче-флаг <code>auditLog: true</code>.</p>
-      <h4>Response 200</h4>
-      <pre>{ "entries": [{ "t": ..., "user": "admin", "ip": "...", "action": "device.create", "details": "router-01 (192.168.1.1)" }], "total": 150, "page": 1, "pageSize": 50, "totalPages": 3 }</pre>
-    </div>
-  </div>
-</section>
-
-<!-- API TOPOLOGY -->
-<section id="api-topology" class="section">
-  <div class="top-bar"><div class="breadcrumb">Docs / API / <span>Topology</span></div></div>
-  <h1>API — Topology</h1>
-
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method GET">GET</span><span class="endpoint-path">/api/topology</span>
-      <span class="endpoint-desc">Список связей на карте</span><span class="auth-badge">auth</span>
-    </div>
-    <div class="endpoint-body">
-      <h4>Response 200</h4>
-      <pre>{ "edges": [{ "id": "e-uuid", "from": "d-uuid1", "to": "d-uuid2", "label": "", "interface": "ether1", "manual": false, "viaRouterId": "r-uuid" }] }</pre>
-    </div>
-  </div>
-
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method POST">POST</span><span class="endpoint-path">/api/discovery/topology/edges</span>
-      <span class="endpoint-desc">Добавить ручную связь</span><span class="op-badge">operator</span>
-    </div>
-    <div class="endpoint-body">
-      <h4>Body</h4><pre>{ "from": "d-uuid1", "to": "d-uuid2", "label": "uplink" }</pre>
-    </div>
-  </div>
-
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method POST">POST</span><span class="endpoint-path">/api/discovery/topology/build/:routerId</span>
-      <span class="endpoint-desc">Автопостроение топологии через MikroTik</span><span class="op-badge">operator</span>
-    </div>
-    <div class="endpoint-body">
-      <p>Тянет таблицы <code>/ip/neighbor/print</code> и <code>/ip/arp/print</code> с роутера, строит связи. Старые автосвязи от этого роутера удаляются.</p>
-      <h4>Response 200</h4><pre>{ "ok": true, "edgesCreated": 12, "routerDeviceId": "d-uuid" }</pre>
-    </div>
-  </div>
-
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method POST">POST</span><span class="endpoint-path">/api/discovery/scan</span>
-      <span class="endpoint-desc">Ping-sweep подсети</span><span class="op-badge">operator</span>
-    </div>
-    <div class="endpoint-body">
-      <h4>Body</h4><pre>{ "cidr": "192.168.1.0/24" }</pre>
-      <p>Поддерживается /24–/30. Параллельность: 16 пингов одновременно.</p>
-      <h4>Response 200</h4><pre>{ "scanned": 254, "found": 12, "results": [{ "ip": "192.168.1.1", "hostname": "router", "inRegistry": true }] }</pre>
-    </div>
-  </div>
-</section>
-
-<!-- API INTEGRATIONS -->
-<section id="api-integrations" class="section">
-  <div class="top-bar"><div class="breadcrumb">Docs / API / <span>Integrations</span></div></div>
-  <h1>API — Integrations</h1>
-
-  <h2>MikroTik</h2>
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method GET">GET</span><span class="endpoint-path">/api/mikrotik/routers</span>
-      <span class="endpoint-desc">Список роутеров</span><span class="auth-badge">auth</span>
-    </div>
-    <div class="endpoint-body"><p>Пароли замаскированы: <code>••••••••</code>.</p></div>
-  </div>
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method POST">POST</span><span class="endpoint-path">/api/mikrotik/routers/:id/import</span>
-      <span class="endpoint-desc">Импорт DHCP-leases</span><span class="op-badge">operator</span>
-    </div>
-    <div class="endpoint-body">
-      <h4>Response 200</h4><pre>{ "ok": true, "created": 5, "updated": 3, "total": 20 }</pre>
-    </div>
-  </div>
-
-  <h2>UniFi</h2>
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method POST">POST</span><span class="endpoint-path">/api/unifi/controllers/:id/import</span>
-      <span class="endpoint-desc">Импорт устройств и клиентов UniFi</span><span class="op-badge">operator</span>
-    </div>
-    <div class="endpoint-body">
-      <h4>Response 200</h4><pre>{ "ok": true, "created": 8, "updated": 2, "total": 45 }</pre>
-    </div>
-  </div>
-
-  <h2>Cisco</h2>
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method POST">POST</span><span class="endpoint-path">/api/cisco/devices/:id/import</span>
-      <span class="endpoint-desc">Импорт из ARP-таблицы Cisco (SSH)</span><span class="op-badge">operator</span>
-    </div>
-    <div class="endpoint-body">
-      <p>Выполняет <code>show ip arp</code> и парсит результат.</p>
-    </div>
-  </div>
-
-  <h2>OUI</h2>
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method GET">GET</span><span class="endpoint-path">/api/oui/status</span>
-      <span class="endpoint-desc">Статус базы производителей</span><span class="auth-badge">auth</span>
-    </div>
-    <div class="endpoint-body">
-      <h4>Response 200</h4><pre>{ "entryCount": 32000, "updatedAt": 1723114800000, "stale": false, "lastError": null }</pre>
-    </div>
-  </div>
-</section>
-
-<!-- API SETTINGS -->
-<section id="api-settings" class="section">
-  <div class="top-bar"><div class="breadcrumb">Docs / API / <span>Settings</span></div></div>
-  <h1>API — Settings</h1>
-
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method GET">GET</span><span class="endpoint-path">/api/features</span>
-      <span class="endpoint-desc">Текущие фиче-флаги</span><span class="auth-badge">auth</span>
-    </div>
-    <div class="endpoint-body">
-      <h4>Response 200</h4><pre>{ "snmp": false, "portChecks": false, "incidents": false, "auditLog": false }</pre>
-    </div>
-  </div>
-
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method GET">GET</span><span class="endpoint-path">/api/branding</span>
-      <span class="endpoint-desc">Настройки брендинга</span><span class="auth-badge">auth</span>
-    </div>
-    <div class="endpoint-body">
-      <h4>Response 200</h4><pre>{ "appName": "NetMonitor", "accentColor": "#3b82f6", "defaultTheme": "dark", "logoExt": "svg" }</pre>
-    </div>
-  </div>
-
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method GET">GET</span><span class="endpoint-path">/api/backup</span>
-      <span class="endpoint-desc">Полный JSON-бэкап системы</span><span class="admin-badge">admin</span>
-    </div>
-    <div class="endpoint-body">
-      <p>Скачивается как файл <code>netmonitor-backup-YYYY-MM-DD.json</code>.</p>
-    </div>
-  </div>
-
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method POST">POST</span><span class="endpoint-path">/api/backup/restore</span>
-      <span class="endpoint-desc">Восстановление из бэкапа</span><span class="admin-badge">admin</span>
-    </div>
-    <div class="endpoint-body">
-      <div class="alert danger"><strong>⚠ Полная замена данных.</strong> Все текущие устройства, настройки, топология будут заменены содержимым бэкапа.</div>
-      <h4>Body</h4><pre>/* содержимое backup.json */</pre>
-    </div>
-  </div>
-
-  <div class="endpoint">
-    <div class="endpoint-header" onclick="toggle(this)">
-      <span class="method GET">GET</span><span class="endpoint-path">/api/health</span>
-      <span class="endpoint-desc">Health check (без авторизации)</span>
-    </div>
-    <div class="endpoint-body">
-      <h4>Response 200</h4><pre>{ "status": "ok", "version": "0.9.0-beta", "uptimeSec": 3600, "time": "2026-08-08T..." }</pre>
-    </div>
-  </div>
-</section>
-
-</main>
-
-<script>
-function show(id) {
-  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-  const sec = document.getElementById(id);
-  if (sec) sec.classList.add('active');
-  document.querySelectorAll('.nav-item').forEach(i => {
-    if (i.getAttribute('onclick') && i.getAttribute('onclick').includes("\'" + id + "\'")) {
-      i.classList.add('active');
-    }
-  });
-  window.scrollTo(0, 0);
-}
-function toggle(header) {
-  const body = header.nextElementSibling;
-  if (body) body.classList.toggle('open');
-}
-</script>
+<script src="app.js"></script>
 </body>
 </html>

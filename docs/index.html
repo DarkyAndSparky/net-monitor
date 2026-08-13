@@ -114,6 +114,7 @@
     <div class="nav-item" onclick="show('roles')"><span class="icon">👥</span>Роли и права доступа</div>
     <div class="nav-item" onclick="show('integrations')"><span class="icon">🔌</span>Интеграции</div>
     <div class="nav-item" onclick="show('alerts')"><span class="icon">🔔</span>Алерты и уведомления</div>
+    <div class="nav-item" onclick="show('maintenance')"><span class="icon">🔧</span>Окна обслуживания</div>
   </div>
 
   <div class="nav-section">
@@ -134,6 +135,7 @@
     <div class="nav-item" onclick="show('api-topology')"><span class="icon">🗺</span>Topology</div>
     <div class="nav-item" onclick="show('api-integrations')"><span class="icon">🔌</span>Integrations</div>
     <div class="nav-item" onclick="show('api-settings')"><span class="icon">⚙️</span>Settings</div>
+    <div class="nav-item" onclick="show('api-maintenance')"><span class="icon">🔧</span>Maintenance</div>
   </div>
 </nav>
 
@@ -189,9 +191,9 @@
   <p class="subtitle">Ручная установка на Windows или Linux/macOS без Docker.</p>
 
   <h2>Windows (install.bat)</h2>
-  <p>Запустите <code>install.bat</code> от имени Администратора — скрипт сам установит зависимости, скомпилирует <code>better-sqlite3</code> и сгенерирует TLS-сертификат.</p>
+  <p>Запустите <code>install.bat</code> от имени Администратора — скрипт установит зависимости npm и сгенерирует TLS-сертификат.</p>
   <pre>install.bat        # от имени Администратора!</pre>
-  <div class="alert warning"><strong>⚠ better-sqlite3</strong> — нативный модуль, требует компиляции. Скрипт установит <code>windows-build-tools</code> и <code>node-gyp</code> автоматически. Если автоустановка не прошла — установите <a href="https://visualstudio.microsoft.com/visual-cpp-build-tools/" style="color:var(--accent)">Visual Studio Build Tools</a> вручную, затем запустите <code>npm rebuild better-sqlite3</code>.</div>
+  <div class="alert success"><strong>✓ Нативных модулей нет.</strong> SQLite использует встроенный <code>node:sqlite</code> (Node.js >= 22.5.0) — Python, Build Tools и node-gyp не нужны. Просто <code>npm install</code>.</div>
 
   <h3>Ручной запуск (если скрипт не устраивает)</h3>
   <pre>npm install
@@ -434,6 +436,48 @@ curl https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates
   <p>В карточке каждого устройства есть галочка «Алерты». Снимите её чтобы исключить конкретное устройство из системы уведомлений, оставив его под мониторингом.</p>
 </section>
 
+<!-- MAINTENANCE -->
+<section id="maintenance" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / <span>Окна обслуживания</span></div></div>
+  <h1>Окна обслуживания (Maintenance Windows)</h1>
+  <p class="subtitle">Временная пауза алертов — мониторинг продолжается, уведомления не отправляются.</p>
+
+  <h2>Назначение</h2>
+  <p>Когда вы перезагружаете сервер, меняете оборудование или делаете резервное копирование — устройства временно уходят offline. Чтобы не получать ложные алерты, создайте окно обслуживания.</p>
+  <div class="alert info"><strong>Мониторинг не останавливается.</strong> История пингов записывается, статусы обновляются. Подавляются только Telegram/Webhook уведомления.</div>
+
+  <h2>Создание через UI</h2>
+  <table>
+    <tr><th>Поле</th><th>Описание</th></tr>
+    <tr><td>Название</td><td>Произвольное: «Замена коммутатора», «Ночной бэкап»</td></tr>
+    <tr><td>Все устройства</td><td>Подавить алерты для всей системы целиком</td></tr>
+    <tr><td>Устройства</td><td>Выбрать конкретные (Ctrl для мультивыбора)</td></tr>
+    <tr><td>Начало / Конец</td><td>Дата и время. Максимальная длительность — 30 дней</td></tr>
+    <tr><td>Примечание</td><td>Опционально — причина или ответственный</td></tr>
+  </table>
+
+  <h2>Статусы окон</h2>
+  <div class="card">
+    <div class="role-row"><span class="role-name" style="color:var(--yellow)">Активно</span><span class="role-perms">Окно действует прямо сейчас. Алерты подавлены.</span></div>
+    <div class="role-row"><span class="role-name" style="color:var(--accent)">Запланировано</span><span class="role-perms">Начало в будущем. Алерты работают в штатном режиме.</span></div>
+    <div class="role-row"><span class="role-name" style="color:var(--muted)">Завершено</span><span class="role-perms">Автоматически удаляется через 7 дней.</span></div>
+  </div>
+
+  <h2>Права</h2>
+  <p>Создание и удаление — роли <code>admin</code> и <code>operator</code>. Просмотр — все авторизованные.</p>
+
+  <h2>Схема таблицы maintenance_windows</h2>
+  <div class="card">
+    <div class="schema-field"><span class="schema-key">id</span><span class="schema-type">TEXT PK</span><span class="schema-note">UUID с префиксом «mw-»</span></div>
+    <div class="schema-field"><span class="schema-key">name</span><span class="schema-type">TEXT</span><span class="schema-note">Название окна</span></div>
+    <div class="schema-field"><span class="schema-key">device_ids</span><span class="schema-type">TEXT (JSON)</span><span class="schema-note">Массив ID устройств. Пустой если all_devices=1</span></div>
+    <div class="schema-field"><span class="schema-key">all_devices</span><span class="schema-type">INTEGER</span><span class="schema-note">0/1 — применять ко всем устройствам</span></div>
+    <div class="schema-field"><span class="schema-key">start_ts / end_ts</span><span class="schema-type">INTEGER</span><span class="schema-note">Начало и конец окна (Unix ms). Индекс по end_ts</span></div>
+    <div class="schema-field"><span class="schema-key">created_by</span><span class="schema-type">TEXT</span><span class="schema-note">Username создавшего пользователя</span></div>
+    <div class="schema-field"><span class="schema-key">note</span><span class="schema-type">TEXT</span><span class="schema-note">Произвольное примечание</span></div>
+  </div>
+</section>
+
 <!-- ARCH -->
 <section id="arch" class="section">
   <div class="top-bar"><div class="breadcrumb">Docs / <span>Архитектура</span></div></div>
@@ -478,7 +522,7 @@ curl https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates
   </div>
 
   <h2>Поток данных</h2>
-  <div class="arch-box">Браузер → HTTPS → Express.js → Middleware (auth) → Route handler → SQLite (better-sqlite3)</div>
+  <div class="arch-box">Браузер → HTTPS → Express.js → Middleware (auth) → Route handler → SQLite (node:sqlite встроенный)</div>
   <div class="arch-arrow">↕</div>
   <div class="arch-box">scheduler.js (setInterval 5сек) → ping → statusCache → SSE broadcast → браузер (без F5)</div>
   <div class="arch-arrow">↕</div>
@@ -504,7 +548,7 @@ curl https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates
     <tr><th>Пакет</th><th>Версия</th><th>Назначение</th></tr>
     <tr><td>express</td><td>^4.19</td><td>HTTP-сервер, роутинг</td></tr>
     <tr><td>express-session</td><td>^1.18</td><td>Сессии (in-memory)</td></tr>
-    <tr><td>better-sqlite3</td><td>^9.4</td><td>SQLite — синхронный драйвер, WAL, без отдельного процесса</td></tr>
+    <tr><td>node:sqlite</td><td>встроен</td><td>SQLite — встроен в Node.js >= 22.5.0, не требует компиляции</td></tr>
     <tr><td>node-routeros</td><td>^1.6</td><td>MikroTik RouterOS API</td></tr>
     <tr><td>net-snmp</td><td>^3.0</td><td>SNMP v1/v2c опрос (опционально)</td></tr>
     <tr><td>ssh2</td><td>^1.15</td><td>Cisco SSH подключение (опционально)</td></tr>
@@ -520,7 +564,7 @@ curl https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates
     <tr><td>CSS Variables</td><td>Вся тема через CSS-переменные, тёмная/светлая тема без JS</td></tr>
   </table>
 
-  <div class="alert info"><strong>better-sqlite3</strong> — нативный модуль (C++), требует компиляции при установке. Это единственная нестандартная зависимость установки. В Docker-образе компилируется при сборке — никаких проблем на продакшне.</div>
+  <div class="alert success"><strong>node:sqlite</strong> встроен в Node.js начиная с v22.5.0 — никакой компиляции, никаких Build Tools, никакого Python. Просто <code>npm install &amp;&amp; node server.js</code>.</div>
 </section>
 
 <!-- DB SCHEMA -->
@@ -1161,6 +1205,62 @@ app.use('/api', require('./src/routes/myroute'));</pre>
     </div>
     <div class="endpoint-body">
       <h4>Response 200</h4><pre>{ "status": "ok", "version": "0.9.0-beta", "uptimeSec": 3600, "time": "2026-08-08T..." }</pre>
+    </div>
+  </div>
+</section>
+
+<!-- API MAINTENANCE -->
+<section id="api-maintenance" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / API / <span>Maintenance</span></div></div>
+  <h1>API — Maintenance Windows</h1>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)">
+      <span class="method GET">GET</span><span class="endpoint-path">/api/maintenance</span>
+      <span class="endpoint-desc">Список всех окон</span><span class="auth-badge">auth</span>
+    </div>
+    <div class="endpoint-body">
+      <h4>Response 200</h4>
+      <pre>[{ "id":"mw-uuid", "name":"Замена коммутатора", "deviceIds":["d-1"], "allDevices":false, "startTs":1723114800000, "endTs":1723121400000, "createdBy":"admin", "note":"", "active":true }]</pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)">
+      <span class="method GET">GET</span><span class="endpoint-path">/api/maintenance/active</span>
+      <span class="endpoint-desc">Активные окна прямо сейчас</span><span class="auth-badge">auth</span>
+    </div>
+    <div class="endpoint-body"><p>Только окна где <code>startTs &le; now &lt; endTs</code>. Используется планировщиком.</p></div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)">
+      <span class="method POST">POST</span><span class="endpoint-path">/api/maintenance</span>
+      <span class="endpoint-desc">Создать окно</span><span class="op-badge">operator</span>
+    </div>
+    <div class="endpoint-body">
+      <h4>Body</h4>
+      <pre>{ "name":"Плановые работы", "allDevices":false, "deviceIds":["d-uuid1"], "startTs":1723114800000, "endTs":1723121400000, "note":"Замена SSD" }</pre>
+      <h4>Ошибки</h4>
+      <table>
+        <tr><th>error</th><th>Причина</th></tr>
+        <tr><td>start_end_required</td><td>startTs или endTs не указан</td></tr>
+        <tr><td>invalid_range</td><td>endTs &le; startTs</td></tr>
+        <tr><td>too_long</td><td>Длительность &gt; 30 дней</td></tr>
+        <tr><td>devices_required</td><td>allDevices=false и deviceIds пустой</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)">
+      <span class="method DELETE">DELETE</span><span class="endpoint-path">/api/maintenance/:id</span>
+      <span class="endpoint-desc">Удалить окно</span><span class="op-badge">operator</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Удаление активного окна немедленно возобновляет алерты для устройств в нём.</p>
+      <h4>Response 200</h4><pre>{ "ok": true }</pre>
+      <div class="alert info"><strong>Автоочистка:</strong> завершённые окна старше 7 дней удаляются автоматически раз в 6 часов.</div>
     </div>
   </div>
 </section>

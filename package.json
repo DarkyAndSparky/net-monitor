@@ -1,16 +1,22 @@
 {
   "name": "net-monitor",
-  "version": "0.9.0-beta",
-  "description": "Self-hosted network monitoring dashboard — devices, map, ping, SNMP, MikroTik, alerts",
+  "version": "26w32-b01",
+  "description": "Self-hosted network monitoring dashboard \u2014 devices, map, ping, SNMP, MikroTik, alerts",
   "main": "server.js",
-  "engines": { "node": ">=18.0.0" },
-  "scripts": { "start": "node server.js" },
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
   "dependencies": {
-    "better-sqlite3": "^9.4.3",
     "express": "^4.19.2",
     "express-session": "^1.18.0",
     "node-routeros": "^1.6.9",
     "net-snmp": "^3.0.0",
+    "pino": "^9.3.2",
+    "pino-pretty": "^11.2.2",
+    "pino-roll": "^1.0.0",
     "ssh2": "^1.15.0"
   }
 }
