@@ -53,30 +53,44 @@ app.use((req, res, next) => {
 
 // ── Health check ──────────────────────────────────────────────────────
 const APP_VERSION = (() => { try { return require('./package.json').version; } catch { return '0.0.0'; } })();
-// Зависимости с актуальными версиями из node_modules
-function getDeps() {
-  const names = ['express','express-session','pino','pino-pretty','pino-roll','node-routeros','net-snmp','ssh2'];
-  const deps = {};
-  names.forEach(name => {
-    try {
-      const pkg = require(`${name}/package.json`);
-      deps[name] = pkg.version;
-    } catch { deps[name] = '—'; }
-  });
-  deps['node:sqlite'] = 'built-in';
-  return deps;
+// Зависимости — реальные версии из node_modules
+let _PKG = null;
+function getPackageJson() {
+  if (_PKG) return _PKG;
+  try { _PKG = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf-8')); } catch { _PKG = {}; }
+  return _PKG;
 }
 
-app.get('/api/health', (req, res) =>
+function getDeps() {
+  const pkg = getPackageJson();
+  const ranges = pkg.dependencies || {};
+  const names = Object.keys(ranges);
+  const deps = {}; const pkgRanges = {};
+  names.forEach(name => {
+    pkgRanges[name] = ranges[name];
+    try { deps[name] = require(`${name}/package.json`).version; }
+    catch { deps[name] = 'не установлен'; }
+  });
+  deps['node:sqlite'] = 'built-in (Node.js)';
+  pkgRanges['node:sqlite'] = '>=22.5.0';
+  return { deps, pkgRanges };
+}
+
+app.get('/api/health', (req, res) => {
+  const { deps, pkgRanges } = getDeps();
+  const mem = process.memoryUsage();
   res.json({
-    status: 'ok',
-    version: APP_VERSION,
+    status:      'ok',
+    version:     APP_VERSION,
     nodeVersion: process.version,
-    uptimeSec: Math.round(process.uptime()),
-    time: new Date().toISOString(),
-    deps: getDeps(),
-  })
-);
+    platform:    process.platform + ' / ' + process.arch,
+    uptimeSec:   Math.round(process.uptime()),
+    memoryMB:    Math.round(mem.rss / 1024 / 1024),
+    time:        new Date().toISOString(),
+    deps,
+    pkgRanges,
+  });
+});
 
 // Скачать LICENSE как txt
 app.get('/api/license', (req, res) => {
@@ -114,32 +128,35 @@ function getLocalIP() {
 
 // ── Красивый стартовый экран ──────────────────────────────────────────
 function printBanner(useHttps, httpsPort, httpPort, localIP) {
-  const line  = '─'.repeat(52);
+  const L = '─'.repeat(52);
   const proto = useHttps ? 'https' : 'http';
   const port  = useHttps ? httpsPort : httpPort;
+  const lines = [
+    '',
+    `  🚀  net-monitor — сервер запущен`,
+    `  ${L}`,
+    `  Протокол:    ${useHttps ? 'HTTPS' : 'HTTP'}`,
+    `  Локально:    ${proto}://localhost:${port}`,
+    useHttps
+      ? `  По сети:     https://${localIP}:${httpsPort}`
+      : `  По сети:     http://${localIP}:${port}`,
+    useHttps
+      ? `  Редирект:    http://localhost:${httpPort} → HTTPS`
+      : null,
+    `  База данных: ${path.join(process.cwd(), 'data', 'netmonitor.db')}`,
+    `  Версия:      ${APP_VERSION}  (Node.js ${process.version})`,
+    `  ${L}`,
+    useHttps
+      ? `  ⚠  Браузер покажет предупреждение о сертификате.`
+      : `  💡 Для HTTPS запусти make-cert.bat и перезапусти сервер.`,
+    useHttps ? `     Нажми «Дополнительно» → «Перейти на сайт»` : null,
+    useHttps ? `  📄 Сертификат: ${CERT_FILE}` : null,
+    `  ${L}`,
+    '',
+  ].filter(l => l !== null).join('\n');
 
-  process.stdout.write('\n');
-  process.stdout.write(`  🚀  net-monitor — сервер запущен\n`);
-  process.stdout.write(`  ${line}\n`);
-  process.stdout.write(`  Протокол:   ${useHttps ? 'HTTPS' : 'HTTP'}\n`);
-  process.stdout.write(`  Локально:   ${proto}://localhost:${port}\n`);
-  if (useHttps) {
-    process.stdout.write(`  По сети:    https://${localIP}:${httpsPort}\n`);
-    process.stdout.write(`  Редирект:   http://localhost:${httpPort} → HTTPS\n`);
-  } else {
-    process.stdout.write(`  По сети:    http://${localIP}:${port}\n`);
-  }
-  process.stdout.write(`  База данных: ${path.join(process.cwd(), 'data', 'netmonitor.db')}\n`);
-  process.stdout.write(`  Версия:     v${APP_VERSION}  (Node.js ${process.version})\n`);
-  process.stdout.write(`  ${line}\n`);
-  if (useHttps) {
-    process.stdout.write(`  ⚠  Браузер покажет предупреждение о самоподписанном сертификате.\n`);
-    process.stdout.write(`     Нажми «Дополнительно» → «Перейти на сайт»\n`);
-    process.stdout.write(`  📄 Сертификат: ${CERT_FILE}\n`);
-  } else {
-    process.stdout.write(`  💡 Для HTTPS запусти make-cert.bat и перезапусти сервер.\n`);
-  }
-  process.stdout.write(`  ${line}\n\n`);
+  // Выводим баннер через setTimeout чтобы он появился ПОСЛЕ всех WARN при старте
+  setTimeout(() => process.stdout.write(lines + '\n'), 50);
 }
 
 // ── Запуск ────────────────────────────────────────────────────────────

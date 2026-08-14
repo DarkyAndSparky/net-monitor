@@ -41,7 +41,20 @@
     <div class="sidebar-footer">
       <div id="current-user" style="margin-bottom:8px;"></div>
       <button id="logout-btn" class="btn-secondary" style="width:100%;">Выйти</button>
-      <div id="app-version" class="hint" style="margin-top:10px; text-align:center;"></div>
+      <div class="sidebar-meta">
+        <div class="sidebar-meta-row">
+          <span class="sidebar-meta-version">Версия <b id="app-version">—</b></span>
+          <a href="https://github.com/DarkyAndSparky/net-monitor" target="_blank" rel="noopener" class="sidebar-meta-gh">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.604-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.579.688.481C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+            GitHub
+          </a>
+        </div>
+        <div class="sidebar-meta-license">
+          <a href="/api/license" download="LICENSE.txt" class="sidebar-meta-mit">Лицензия MIT</a>
+          <span class="sidebar-meta-dot">·</span>
+          <span class="sidebar-meta-author">DarkyAndSparky</span>
+        </div>
+      </div>
     </div>
   </aside>
 
@@ -604,30 +617,49 @@
 
       <!-- О СИСТЕМЕ -->
       <div class="settings-subtab hidden" data-settings-panel="about">
-      <h2>О системе</h2>
 
-      <!-- Карточки версии и ссылок -->
-      <div class="about-hero">
-        <div class="about-logo">📡</div>
-        <div class="about-title-block">
-          <div class="about-app-name">net-monitor</div>
-          <div class="about-version-line">
-            <span class="about-version-badge" id="about-version">—</span>
-            <span class="about-node-badge" id="about-node">Node.js —</span>
-          </div>
-          <div class="about-desc">Self-hosted система мониторинга локальной сети</div>
+        <!-- Приложение -->
+        <div class="sysinfo-card">
+          <div class="sysinfo-card-title"><span class="sysinfo-icon">📡</span> net-monitor</div>
+          <div class="sysinfo-row"><span class="sysinfo-label">Версия</span><span class="sysinfo-val sysinfo-version" id="about-version">—</span></div>
+          <div class="sysinfo-row"><span class="sysinfo-label">Описание</span><span class="sysinfo-val">Self-hosted система мониторинга локальной сети</span></div>
+          <div class="sysinfo-row"><span class="sysinfo-label">Лицензия</span><span class="sysinfo-val"><a href="/api/license" download="LICENSE.txt" class="sysinfo-link">MIT ↓</a></span></div>
+          <div class="sysinfo-row"><span class="sysinfo-label">Автор</span><span class="sysinfo-val">DarkyAndSparky</span></div>
+          <div class="sysinfo-row"><span class="sysinfo-label">Репозиторий</span><span class="sysinfo-val"><a href="https://github.com/DarkyAndSparky/net-monitor" target="_blank" rel="noopener" class="sysinfo-link">github.com/DarkyAndSparky/net-monitor</a></span></div>
         </div>
-      </div>
 
-      <div class="about-links-row">
-        <a class="about-link-btn" href="https://github.com/DarkyAndSparky/net-monitor" target="_blank" rel="noopener">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.604-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.579.688.481C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
-          GitHub
-        </a>
-        <a class="about-link-btn" href="https://github.com/DarkyAndSparky/net-monitor/blob/main/docs/index.html" target="_blank" rel="noopener">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
-          Документация
-        </a>
+        <!-- Окружение -->
+        <div class="sysinfo-card">
+          <div class="sysinfo-card-title"><span class="sysinfo-icon">🖥</span> Окружение</div>
+          <div class="sysinfo-row"><span class="sysinfo-label">Node.js</span><span class="sysinfo-val" id="ai-node">—</span></div>
+          <div class="sysinfo-row"><span class="sysinfo-label">Платформа</span><span class="sysinfo-val" id="ai-platform">—</span></div>
+          <div class="sysinfo-row"><span class="sysinfo-label">Время работы</span><span class="sysinfo-val" id="ai-uptime">—</span></div>
+          <div class="sysinfo-row"><span class="sysinfo-label">Память процесса</span><span class="sysinfo-val" id="ai-memory">—</span></div>
+          <div class="sysinfo-row"><span class="sysinfo-label">Время сервера</span><span class="sysinfo-val" id="ai-time">—</span></div>
+        </div>
+
+        <!-- Данные -->
+        <div class="sysinfo-card">
+          <div class="sysinfo-card-title"><span class="sysinfo-icon">🗄</span> Данные</div>
+          <div class="sysinfo-counters">
+            <div class="sysinfo-counter"><span class="sysinfo-counter-num" id="ai-devices">—</span><span class="sysinfo-counter-label">устройств</span></div>
+            <div class="sysinfo-counter"><span class="sysinfo-counter-num" id="ai-monitored">—</span><span class="sysinfo-counter-label">мониторится</span></div>
+            <div class="sysinfo-counter"><span class="sysinfo-counter-num" id="ai-online">—</span><span class="sysinfo-counter-label">онлайн</span></div>
+            <div class="sysinfo-counter"><span class="sysinfo-counter-num" id="ai-users">—</span><span class="sysinfo-counter-label">пользователей</span></div>
+          </div>
+        </div>
+
+        <!-- Зависимости -->
+        <div class="sysinfo-card">
+          <div class="sysinfo-card-title"><span class="sysinfo-icon">📦</span> Зависимости <span id="ai-deps-count" style="font-size:12px;font-weight:400;color:var(--text-dim)"></span></div>
+          <table class="sysinfo-deps-table">
+            <thead><tr><th>Пакет</th><th>Установлено</th><th>В package.json</th></tr></thead>
+            <tbody id="ai-deps-tbody">
+              <tr><td colspan="3" style="color:var(--text-dim);text-align:center;padding:12px">Загрузка...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
       </div>
 
       <!-- Системная информация -->

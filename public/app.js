@@ -1690,44 +1690,58 @@ document.getElementById('oui-refresh-btn').addEventListener('click', async () =>
 });
 
 async function loadAboutPanel() {
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
   try {
     const h = await api('/api/health').then(r => r.json());
-    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
 
-    // Шапка
-    const ver = h.version || '?';
-    set('about-version', ver);
-    set('about-node',    'Node.js ' + (h.nodeVersion || '—'));
-    set('ai-version',    ver);
+    // Версия и окружение
+    set('about-version', h.version || '?');
     set('ai-node',       h.nodeVersion || '—');
+    set('ai-platform',   (typeof process !== 'undefined' ? process.platform : '') || h.platform || '—');
 
     // Аптайм
     const sec = h.uptimeSec || 0;
     const dd  = Math.floor(sec / 86400);
     const hh  = Math.floor((sec % 86400) / 3600);
     const mm  = Math.floor((sec % 3600) / 60);
-    const ss  = sec % 60;
     const pad = n => String(n).padStart(2,'0');
-    set('ai-uptime', (dd > 0 ? dd + 'д ' : '') + pad(hh) + ':' + pad(mm) + ':' + pad(ss));
+    const uptimeStr = (dd > 0 ? dd + ' дн ' : '') + (hh > 0 ? hh + ' ч ' : '') + mm + ' мин';
+    set('ai-uptime', uptimeStr);
+
+    // Память
+    if (h.memoryMB) set('ai-memory', h.memoryMB + ' МБ');
 
     // Время сервера
     if (h.time) set('ai-time', new Date(h.time).toLocaleString('ru-RU'));
 
-    // Версии зависимостей из node_modules (приходят в h.deps)
-    if (h.deps && typeof h.deps === 'object') {
-      document.querySelectorAll('.about-dep-card').forEach(card => {
-        const nameEl = card.querySelector('.dep-name');
-        const verEl  = card.querySelector('.dep-ver');
-        if (!nameEl || !verEl) return;
-        const name = nameEl.textContent.trim();
-        if (h.deps[name] && h.deps[name] !== '—') {
-          verEl.textContent = h.deps[name];
-          verEl.style.color = 'var(--green)';
-        }
-      });
+    // Таблица зависимостей
+    const tbody = document.getElementById('ai-deps-tbody');
+    const depsCount = document.getElementById('ai-deps-count');
+    if (tbody && h.deps) {
+      const pkgRanges = h.pkgRanges || {};
+      const entries = Object.entries(h.deps).sort((a,b) => a[0].localeCompare(b[0]));
+      if (depsCount) depsCount.textContent = '(' + entries.length + ')';
+      tbody.innerHTML = entries.map(([name, ver]) =>
+        `<tr>
+          <td>${esc(name)}</td>
+          <td>${esc(ver)}</td>
+          <td>${esc(pkgRanges[name] || '—')}</td>
+        </tr>`
+      ).join('');
     }
+  } catch (e) { console.error('loadAboutPanel:', e); }
 
-  } catch (e) { /* ignore */ }
+  // Счётчики данных из STATUS и DEVICES
+  try {
+    const total     = DEVICES.length;
+    const monitored = DEVICES.filter(d => d.monitored).length;
+    const online    = Object.values(STATUS).filter(s => s.online === true).length;
+    const users     = await api('/api/users').then(r => r.json()).then(u => u.length).catch(() => '—');
+    set('ai-devices',   total);
+    set('ai-monitored', monitored);
+    set('ai-online',    online);
+    set('ai-users',     users);
+  } catch {}
 }
 
 // ---------------- КАТЕГОРИИ УСТРОЙСТВ ----------------
@@ -1805,7 +1819,8 @@ async function loadConnections() {
         <td>${esc(c.user || '')}</td>
         <td class="row-actions admin-only">
           <button class="small-btn conn-import-btn" data-id="${esc(c.id)}" data-type="${c.type}">Импортировать</button>
-          <button class="conn-delete-btn" data-id="${esc(c.id)}" data-type="${c.type}">🗑</button>
+          <button class="small-btn conn-edit-btn" data-id="${esc(c.id)}" data-type="${c.type}" title="Редактировать">✏</button>
+          <button class="conn-delete-btn" data-id="${esc(c.id)}" data-type="${c.type}" title="Удалить">🗑</button>
         </td>
       </tr>`).join('') : `<tr><td colspan="6" class="hint">Подключений ещё не добавлено</td></tr>`;
 
@@ -1815,7 +1830,48 @@ async function loadConnections() {
     tbody.querySelectorAll('.conn-delete-btn').forEach(btn => {
       btn.addEventListener('click', () => deleteConnection(btn.dataset.type, btn.dataset.id));
     });
+    tbody.querySelectorAll('.conn-edit-btn').forEach(btn => {
+      btn.addEventListener('click', () => editConnection(btn.dataset.type, btn.dataset.id, rows));
+    });
   } catch (e) { /* ignore */ }
+}
+
+async function editConnection(type, id, rows) {
+  const conn = rows.find(r => r.id === id && r.type === type);
+  if (!conn) return;
+  // Заполняем форму добавления данными для редактирования
+  const typeSelect = document.getElementById('conn-type');
+  if (typeSelect) {
+    typeSelect.value = type === 'mikrotik' ? 'mikrotik' : type === 'unifi' ? 'unifi' : 'cisco';
+    typeSelect.dispatchEvent(new Event('change'));
+  }
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val ?? ''; };
+  set('conn-name', conn.name);
+  set('conn-host', conn.host);
+  set('conn-port', conn.port);
+  set('conn-user', conn.user);
+  set('conn-password', '');  // пароль не передаётся, пусть введут заново
+  if (type === 'unifi') {
+    set('conn-site', conn.site);
+    const unifiosEl = document.getElementById('conn-unifios');
+    if (unifiosEl) unifiosEl.checked = !!conn.unifiOS;
+  }
+  if (type === 'mikrotik') {
+    const tlsEl = document.getElementById('conn-tls');
+    if (tlsEl) tlsEl.checked = !!conn.useTls;
+  }
+  // Сначала удаляем старое, потом форма создаст новое при сабмите
+  if (await showConfirm(
+    `Редактировать подключение "${conn.name}"?`,
+    'Текущая запись будет удалена и создана заново с новыми данными. Введите новые данные в форму ниже и нажмите «Добавить».',
+    { okLabel: 'Удалить и редактировать', okClass: 'btn-primary' }
+  )) {
+    await api(`${CONN_TYPE_ENDPOINTS[type]}/${id}`, { method: 'DELETE' });
+    await loadConnections();
+    toast(`Подключение "${conn.name}" удалено — введите новые данные и нажмите «Добавить»`, 'info', 6000);
+    // Скроллим к форме
+    document.getElementById('conn-type')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
 }
 
 async function importConnection(type, id, btn) {
@@ -2134,7 +2190,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 fetch('/api/health').then(r => r.json()).then(h => {
-  document.getElementById('app-version').textContent = 'v' + (h.version || '?');
+  document.getElementById('app-version').textContent = h.version || '?';
 }).catch(() => {});
 
 // ---------------- ТЕМА И БРЕНДИНГ (применяются ещё до логина) ----------------
@@ -2180,6 +2236,8 @@ document.querySelectorAll('.settings-tab-btn').forEach(btn => {
     document.querySelectorAll('.settings-subtab').forEach(p => p.classList.add('hidden'));
     btn.classList.add('active');
     document.querySelector(`.settings-subtab[data-settings-panel="${btn.dataset.settingsTab}"]`).classList.remove('hidden');
+    // Перезагружаем данные при открытии вкладки "О системе"
+    if (btn.dataset.settingsTab === 'about') loadAboutPanel();
   });
 });
 

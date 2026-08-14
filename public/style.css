@@ -441,78 +441,101 @@ form label{display:flex; flex-direction:column; gap:5px; font-size:12px; color:v
 }
 .empty-state .empty-action:hover { background: #2563eb; }
 
+
+
 /* ════════════════════════════════
-   О СИСТЕМЕ
+   О СИСТЕМЕ — стиль procure-it
 ════════════════════════════════ */
-.about-hero {
-  display: flex; align-items: center; gap: 16px;
+.sysinfo-card {
   background: var(--panel); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 20px; margin-bottom: 14px;
+  border-radius: var(--radius); padding: 0; margin-bottom: 10px;
+  overflow: hidden;
 }
-.about-logo { font-size: 40px; line-height: 1; }
-.about-app-name { font-size: 20px; font-weight: 700; }
-.about-version-line { display: flex; gap: 8px; align-items: center; margin: 6px 0 4px; flex-wrap: wrap; }
-.about-version-badge {
-  font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 12px;
-  background: rgba(59,130,246,.15); color: var(--accent); border: 1px solid rgba(59,130,246,.3);
+.sysinfo-card-title {
+  font-size: 13px; font-weight: 600; color: var(--text);
+  padding: 11px 16px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px;
 }
-.about-node-badge {
-  font-size: 12px; padding: 3px 10px; border-radius: 12px;
-  background: rgba(34,197,94,.12); color: var(--green); border: 1px solid rgba(34,197,94,.25);
-}
-.about-desc { font-size: 12px; color: var(--text-dim); }
+.sysinfo-icon { font-size: 15px; }
 
-.about-links-row { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
-.about-link-btn {
-  display: inline-flex; align-items: center; gap: 7px;
-  background: var(--panel); border: 1px solid var(--border);
-  color: var(--text-dim); padding: 8px 14px; border-radius: 8px;
-  font-size: 13px; text-decoration: none; transition: all .15s;
+.sysinfo-row {
+  display: flex; align-items: center;
+  padding: 8px 16px; border-bottom: 1px solid var(--border); font-size: 13px;
 }
-.about-link-btn:hover { border-color: var(--accent); color: var(--accent); }
+.sysinfo-row:last-child { border-bottom: none; }
+.sysinfo-label { color: var(--text-dim); min-width: 170px; flex-shrink: 0; }
+.sysinfo-val   { color: var(--text); flex: 1; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
+.sysinfo-version { color: var(--accent) !important; font-weight: 700; font-size: 13px !important; }
+.sysinfo-link  { color: var(--accent); text-decoration: none; }
+.sysinfo-link:hover { text-decoration: underline; }
 
-.about-section-label {
-  font-size: 11px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .08em; color: var(--text-dim); margin: 20px 0 8px;
+/* Счётчики данных */
+.sysinfo-counters {
+  display: flex; gap: 0; padding: 14px 16px;
 }
+.sysinfo-counter {
+  display: flex; flex-direction: column; align-items: center;
+  flex: 1; gap: 3px;
+}
+.sysinfo-counter + .sysinfo-counter {
+  border-left: 1px solid var(--border);
+}
+.sysinfo-counter-num {
+  font-size: 24px; font-weight: 700; color: var(--green);
+  font-family: 'JetBrains Mono', monospace;
+}
+.sysinfo-counter-label { font-size: 11px; color: var(--text-dim); }
 
-.about-info-grid {
-  background: var(--panel); border: 1px solid var(--border);
-  border-radius: var(--radius); overflow: hidden; margin-bottom: 4px;
+/* Таблица зависимостей */
+.sysinfo-deps-table {
+  width: 100%; border-collapse: collapse; font-size: 13px;
 }
-.about-info-row {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 9px 14px; border-bottom: 1px solid var(--border); font-size: 13px;
+.sysinfo-deps-table th {
+  text-align: left; padding: 8px 16px;
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .05em; color: var(--text-dim);
+  background: var(--panel-2); border-bottom: 1px solid var(--border);
 }
-.about-info-row:last-child { border-bottom: none; }
-.about-info-key { color: var(--text-dim); }
-.about-info-val { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text); }
+.sysinfo-deps-table td {
+  padding: 7px 16px; border-bottom: 1px solid var(--border); color: var(--text-dim);
+}
+.sysinfo-deps-table tr:last-child td { border-bottom: none; }
+.sysinfo-deps-table tr:hover td { background: var(--panel-2); }
+.sysinfo-deps-table td:first-child { color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+.sysinfo-deps-table td:nth-child(2) { color: var(--green); font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+.sysinfo-deps-table td:nth-child(3) { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-dim); }
 
-.about-deps-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 8px; margin-bottom: 4px;
+/* ════════════════════════════════
+   SIDEBAR FOOTER — мета-информация
+════════════════════════════════ */
+.sidebar-meta {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
 }
-.about-dep-card {
-  background: var(--panel); border: 1px solid var(--border);
-  border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 3px;
+.sidebar-meta-row {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 5px;
 }
-.dep-name { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--accent); font-weight: 600; }
-.dep-ver  { font-size: 11px; color: var(--text-dim); }
-.dep-desc { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
-
-.about-license-block {
-  background: var(--panel); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 16px 18px;
+.sidebar-meta-version {
+  font-size: 11px; color: var(--text-dim);
 }
-.about-license-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
-.about-license-badge {
-  font-size: 12px; font-weight: 700; padding: 4px 12px; border-radius: 12px;
-  background: rgba(245,158,11,.12); color: var(--yellow); border: 1px solid rgba(245,158,11,.3);
+.sidebar-meta-version b {
+  color: var(--accent); font-weight: 600;
 }
-.about-license-year { font-size: 13px; color: var(--text-dim); }
-.about-license-text { font-size: 12px; color: var(--text-dim); line-height: 1.7; margin: 0 0 6px; }
-.about-license-link {
-  display: inline-block; margin-top: 10px; font-size: 12px;
-  color: var(--accent); text-decoration: none;
+.sidebar-meta-gh {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; color: var(--text-dim); text-decoration: none;
+  padding: 3px 8px; border: 1px solid var(--border);
+  border-radius: 6px; transition: all .12s;
 }
-.about-license-link:hover { text-decoration: underline; }
+.sidebar-meta-gh:hover { color: var(--text); border-color: var(--text-dim); }
+.sidebar-meta-license {
+  display: flex; align-items: center; gap: 5px; font-size: 11px;
+}
+.sidebar-meta-mit {
+  color: var(--text-dim); text-decoration: none;
+}
+.sidebar-meta-mit:hover { color: var(--accent); }
+.sidebar-meta-dot { color: var(--border); }
+.sidebar-meta-author { color: var(--text-dim); }
