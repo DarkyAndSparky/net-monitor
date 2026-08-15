@@ -251,6 +251,16 @@ function renderDashboard() {
 
   const key = DEVICES.filter(d => d.key);
   const keyWrap = document.getElementById('key-devices');
+  if (!DEVICES.length) {
+    keyWrap.innerHTML = `<div class="empty-state">
+      <i class="ti ti-server-off"></i>
+      <h3>Устройств пока нет</h3>
+      <p>Добавьте первое устройство вручную или импортируйте из MikroTik / CSV.</p>
+      ${CURRENT_ROLE !== 'viewer' ? "<button class=\"empty-action\" onclick=\"showTab(&quot;devices&quot;);openAdd()\">+ Добавить устройство</button>" : ''}
+    </div>`;
+    return;
+  }
+
   keyWrap.innerHTML = key.length ? key.map(d => {
     const s = STATUS[d.id];
     let cls, label;
@@ -377,6 +387,7 @@ function renderDevices() {
       <td><span class="cat-badge" style="background:${esc(c.color)}22;color:${esc(c.color)}">${esc(c.name)}</span></td>
       <td>${esc(d.comment)}</td>
       <td class="row-actions admin-only">
+        <button onclick="openDeviceDetail('${d.id}')" title="Подробнее">🔍</button>
         <button onclick="openEdit('${d.id}')">✎</button>
         <button onclick="duplicateDevice('${d.id}')" title="Дублировать">⧉</button>
         <button onclick="deleteDevice('${d.id}')">🗑</button>
@@ -417,6 +428,7 @@ function renderDevices() {
       </dl>
       ${d.comment ? `<div class="comment">${esc(d.comment)}</div>` : ''}
       <div class="row-actions admin-only">
+        <button onclick="openDeviceDetail('${d.id}')">🔍 Подробнее</button>
         <button onclick="openEdit('${d.id}')">✎ Изменить</button>
         <button onclick="duplicateDevice('${d.id}')">⧉ Дублировать</button>
         <button onclick="deleteDevice('${d.id}')">🗑 Удалить</button>
@@ -817,6 +829,16 @@ function renderMap() {
   });
 
   svg.innerHTML = cloudsHtml + edgesHtml + nodesHtml;
+  if (!DEVICES.length) {
+    svg.innerHTML = `<foreignObject x="0" y="0" width="100%" height="100%">
+      <div xmlns="http://www.w3.org/1999/xhtml" class="empty-state" style="height:100%;justify-content:center;">
+        <i class="ti ti-topology-star-off" style="font-size:48px;opacity:.3;margin-bottom:16px;"></i>
+        <h3 style="margin:0 0 8px;font-size:16px;">Карта пуста</h3>
+        <p style="margin:0 0 20px;font-size:13px;text-align:center;max-width:300px;color:var(--text-dim)">Добавьте устройства чтобы они появились на карте</p>
+      </div>
+    </foreignObject>`;
+    return;
+  }
   applyMapView();
   attachMapInteractions(svg);
 
@@ -1237,6 +1259,18 @@ function renderMonitoring() {
   const monitoredCount = DEVICES.filter(d => d.monitored).length;
   document.getElementById('monitoring-count').textContent = `Отслеживается: ${monitoredCount} из ${DEVICES.length}`;
 
+  if (!DEVICES.length) {
+    tbody.innerHTML = `<tr><td colspan="7">
+      <div class="empty-state">
+        <i class="ti ti-activity-off"></i>
+        <h3>Нечего мониторить</h3>
+        <p>Сначала добавьте устройства в реестр.</p>
+        ${CURRENT_ROLE !== 'viewer' ? "<button class=\"empty-action\" onclick=\"showTab(&quot;devices&quot;);openAdd()\">+ Добавить устройство</button>" : ''}
+      </div>
+    </td></tr>`;
+    return;
+  }
+
   tbody.innerHTML = DEVICES.map(d => {
     const c = catById(d.category);
     const s = STATUS[d.id];
@@ -1652,13 +1686,12 @@ document.getElementById('csv-import-btn').addEventListener('click', async () => 
 });
 
 async function loadSettings() {
-  loadAboutPanel(); // доступно всем ролям
   loadOuiStatus(); // доступно всем ролям (кнопка обновления — только админу)
-  if (CURRENT_ROLE === 'viewer') return; // у viewer в «Настройках» доступна только смена пароля, «О системе» и статус OUI
+  if (CURRENT_ROLE === 'viewer') return; // у viewer в «Настройках» доступна только смена пароля и статус OUI
   renderCategoriesTable();
   await Promise.all([loadConnections(), loadAlertSettings()]);
-  if (CURRENT_ROLE !== 'admin') return; // Operator не видит пользователей/функции/брендинг/бэкап/аудит-лог
-  await Promise.all([loadUsers(), loadFeaturesForm(), loadBrandingForm()]);
+  if (CURRENT_ROLE !== 'admin') return; // Operator не видит пользователей/функции/брендинг/бэкап/аудит-лог/о системе
+  await Promise.all([loadUsers(), loadFeaturesForm(), loadBrandingForm(), loadAboutPanel()]);
 }
 
 // ---------------- OUI: БАЗА ПРОИЗВОДИТЕЛЕЙ ----------------
@@ -1689,59 +1722,231 @@ document.getElementById('oui-refresh-btn').addEventListener('click', async () =>
   }
 });
 
+// ── MIT-лицензия — скачивание текста по клику ────────────────────────
+function downloadLicense() {
+  const year = new Date().getFullYear();
+  const text = `MIT License
+
+Copyright (c) ${year} DarkyAndSparky
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+`;
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'LICENSE.txt';
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+}
+
+// ── Полная страница «О системе» — динамический список зависимостей ───
 async function loadAboutPanel() {
-  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  const el = document.getElementById('about-page-content');
+  if (!el) return;
+  el.innerHTML = '<div style="color:var(--text-dim);font-size:13px">Загрузка…</div>';
+  let info;
   try {
-    const h = await api('/api/health').then(r => r.json());
+    info = await api('/api/system-info').then(r => r.json());
+  } catch (e) {
+    el.innerHTML = `<div class="si-card"><div class="si-card-body" style="color:var(--red)">Не удалось загрузить: ${esc(e.message)}</div></div>`;
+    return;
+  }
 
-    // Версия и окружение
-    set('about-version', h.version || '?');
-    set('ai-node',       h.nodeVersion || '—');
-    set('ai-platform',   (typeof process !== 'undefined' ? process.platform : '') || h.platform || '—');
+  const depRow = (d) => `
+    <tr data-pkg="${esc(d.name)}">
+      <td class="si-pkg-name">${esc(d.name)}</td>
+      <td class="si-pkg-installed" style="color:${d.installed ? 'var(--green)' : 'var(--red)'}">${esc(d.installed || '— не установлен')}</td>
+      <td class="si-pkg-range">${esc(d.range)}</td>
+      <td class="outdated-cell si-outdated-col"></td>
+    </tr>`;
 
-    // Аптайм
-    const sec = h.uptimeSec || 0;
-    const dd  = Math.floor(sec / 86400);
-    const hh  = Math.floor((sec % 86400) / 3600);
-    const mm  = Math.floor((sec % 3600) / 60);
-    const pad = n => String(n).padStart(2,'0');
-    const uptimeStr = (dd > 0 ? dd + ' дн ' : '') + (hh > 0 ? hh + ' ч ' : '') + mm + ' мин';
-    set('ai-uptime', uptimeStr);
+  el.innerHTML = `
+    <div class="si-card">
+      <div class="si-card-header"><span class="si-card-title">ℹ️ ${esc(info.name)}</span></div>
+      <div class="si-card-body">
+        <div class="si-grid">
+          <span>Версия</span><span style="font-family:monospace;font-weight:600">${esc(info.version)}</span>
+          <span>Описание</span><span>${esc(info.description || '—')}</span>
+          <span>Лицензия</span><span><a href="#" onclick="downloadLicense();return false;" class="si-link" title="Скачать текст лицензии">${esc(info.license)} — скачать</a></span>
+          <span>Автор</span><span>${esc(info.author)}</span>
+          <span>Репозиторий</span><span><a href="${esc(info.repository)}" target="_blank" rel="noopener" class="si-link">${esc(info.repository)}</a></span>
+        </div>
+      </div>
+    </div>
 
-    // Память
-    if (h.memoryMB) set('ai-memory', h.memoryMB + ' МБ');
+    <div class="si-card" id="about-env-card">
+      <div class="si-card-header"><span class="si-card-title">🖥️ Окружение</span><span class="si-card-hint">обновляется каждые 10 сек</span></div>
+      <div class="si-card-body">
+        <div class="si-grid">
+          <span>Node.js</span><span style="font-family:monospace">${esc(info.node)}</span>
+          <span>Платформа</span><span style="font-family:monospace">${esc(info.platform)} / ${esc(info.arch)}</span>
+          <span>Время работы</span><span id="about-env-uptime">${fmtUptimeShared(info.uptimeSec)}</span>
+          <span>Память процесса</span><span id="about-env-memory">${info.memoryMB} МБ</span>
+          <span>PID</span><span style="font-family:monospace">${info.pid}</span>
+          <span>Размер БД</span><span id="about-env-dbsize">${fmtBytesShared(info.dbSizeBytes)}</span>
+        </div>
+      </div>
+    </div>
 
-    // Время сервера
-    if (h.time) set('ai-time', new Date(h.time).toLocaleString('ru-RU'));
+    <div class="si-card">
+      <div class="si-card-header"><span class="si-card-title">🧰 Технологии</span></div>
+      <div class="si-card-body">
+        <div class="si-tech-grid">${buildTechStackHtml(info)}</div>
+      </div>
+    </div>
 
-    // Таблица зависимостей
-    const tbody = document.getElementById('ai-deps-tbody');
-    const depsCount = document.getElementById('ai-deps-count');
-    if (tbody && h.deps) {
-      const pkgRanges = h.pkgRanges || {};
-      const entries = Object.entries(h.deps).sort((a,b) => a[0].localeCompare(b[0]));
-      if (depsCount) depsCount.textContent = '(' + entries.length + ')';
-      tbody.innerHTML = entries.map(([name, ver]) =>
-        `<tr>
-          <td>${esc(name)}</td>
-          <td>${esc(ver)}</td>
-          <td>${esc(pkgRanges[name] || '—')}</td>
-        </tr>`
-      ).join('');
-    }
-  } catch (e) { console.error('loadAboutPanel:', e); }
+    <div class="si-card">
+      <div class="si-card-header"><span class="si-card-title">📊 Данные</span></div>
+      <div class="si-card-body">
+        <div class="si-counts">
+          <div><div class="si-count-num">${info.counts?.devices ?? '—'}</div><div class="si-count-label">устройств</div></div>
+          <div><div class="si-count-num">${info.counts?.monitored ?? '—'}</div><div class="si-count-label">мониторится</div></div>
+          <div><div class="si-count-num">${info.counts?.users ?? '—'}</div><div class="si-count-label">пользователей</div></div>
+        </div>
+      </div>
+    </div>
 
-  // Счётчики данных из STATUS и DEVICES
+    <div class="si-card">
+      <div class="si-card-header">
+        <span class="si-card-title">📦 Зависимости (${info.dependencies.length})</span>
+        <button class="small-btn" id="btn-check-outdated" onclick="checkOutdatedPackages()" style="margin-left:auto">🔄 Проверить обновления</button>
+      </div>
+      <div id="outdated-summary" class="si-outdated-summary"></div>
+      <div class="si-table-wrap">
+        <table class="si-table">
+          <thead><tr>
+            <th>Пакет</th>
+            <th>Установлено</th>
+            <th>Диапазон в package.json</th>
+            <th id="outdated-col-header" class="si-outdated-col">Последняя на npm</th>
+          </tr></thead>
+          <tbody id="deps-tbody">${info.dependencies.map(depRow).join('')}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+  startAboutEnvPolling();
+}
+
+// ── Технологии — курируемое описание стека (не статичный список: показываем
+// только то, что реально присутствует в dependencies) ────────────────
+function buildTechStackHtml(info) {
+  const installedNames = new Set((info.dependencies || []).map(d => d.name));
+  const has = (name) => installedNames.has(name);
+
+  const items = [
+    { cond: true,               icon: '🟢', title: 'Node.js + Express', desc: 'Backend-сервер и REST API' },
+    { cond: true,                icon: '🗄️', title: 'node:sqlite', desc: 'Встроенный SQLite, без компиляции нативных модулей' },
+    { cond: has('pino'),         icon: '📝', title: 'pino', desc: 'Структурированные логи с ротацией' },
+    { cond: has('node-routeros'),icon: '🔌', title: 'node-routeros', desc: 'MikroTik RouterOS API' },
+    { cond: has('net-snmp'),     icon: '📡', title: 'net-snmp', desc: 'SNMP-опрос сетевых устройств' },
+    { cond: has('ssh2'),         icon: '🔒', title: 'ssh2', desc: 'Cisco SSH подключение' },
+    { cond: has('express-session'), icon: '🔑', title: 'express-session', desc: 'Управление сессиями' },
+    { cond: true,                icon: '⚡', title: 'Server-Sent Events', desc: 'Живые обновления карты и статусов без polling' },
+    { cond: true,                icon: '🍦', title: 'Vanilla JS + HTML/CSS', desc: 'Фронтенд без фреймворков и сборщиков' },
+    { cond: true,                icon: '🗺️', title: 'SVG-карта сети', desc: 'Интерактивная топология без внешних библиотек' },
+  ];
+
+  return items.filter(i => i.cond).map(i => `
+    <div class="si-tech-item">
+      <span class="si-tech-icon">${i.icon}</span>
+      <div>
+        <div class="si-tech-title">${esc(i.title)}</div>
+        <div class="si-tech-desc">${esc(i.desc)}</div>
+      </div>
+    </div>`).join('');
+}
+
+// ── Автообновление карточки «Окружение» ───────────────────────────────
+let aboutEnvPollTimer = null;
+function startAboutEnvPolling() {
+  if (aboutEnvPollTimer) clearInterval(aboutEnvPollTimer);
+  aboutEnvPollTimer = setInterval(async () => {
+    const card = document.getElementById('about-env-card');
+    if (!card) { clearInterval(aboutEnvPollTimer); aboutEnvPollTimer = null; return; }
+    try {
+      const info = await api('/api/system-info').then(r => r.json());
+      const up  = document.getElementById('about-env-uptime');
+      const mem = document.getElementById('about-env-memory');
+      const dbs = document.getElementById('about-env-dbsize');
+      if (up)  up.textContent  = fmtUptimeShared(info.uptimeSec);
+      if (mem) mem.textContent = info.memoryMB + ' МБ';
+      if (dbs) dbs.textContent = fmtBytesShared(info.dbSizeBytes);
+    } catch { /* ignore */ }
+  }, 10000);
+}
+
+function fmtUptimeShared(sec) {
+  const d = Math.floor(sec / 86400), h = Math.floor((sec % 86400) / 3600), m = Math.floor((sec % 3600) / 60);
+  const parts = [];
+  if (d) parts.push(`${d} д`);
+  if (h) parts.push(`${h} ч`);
+  parts.push(`${m} мин`);
+  return parts.join(' ');
+}
+function fmtBytesShared(b) {
+  return b > 1024*1024 ? `${(b/1024/1024).toFixed(1)} МБ` : `${(b/1024).toFixed(0)} КБ`;
+}
+
+// ── Проверка устаревших пакетов — по клику (npm outdated на сервере) ──
+async function checkOutdatedPackages() {
+  const btn = document.getElementById('btn-check-outdated');
+  const summary = document.getElementById('outdated-summary');
+  const colHeader = document.getElementById('outdated-col-header');
+  if (!btn) return;
+  const origText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳ Проверка…';
+  summary.textContent = '';
+
   try {
-    const total     = DEVICES.length;
-    const monitored = DEVICES.filter(d => d.monitored).length;
-    const online    = Object.values(STATUS).filter(s => s.online === true).length;
-    const users     = await api('/api/users').then(r => r.json()).then(u => u.length).catch(() => '—');
-    set('ai-devices',   total);
-    set('ai-monitored', monitored);
-    set('ai-online',    online);
-    set('ai-users',     users);
-  } catch {}
+    const result = await api('/api/system-info/outdated').then(r => r.json());
+    colHeader.classList.remove('si-outdated-col');
+    document.querySelectorAll('.outdated-cell').forEach(td => td.classList.remove('si-outdated-col'));
+
+    const outdatedMap = {};
+    (result.outdated || []).forEach(o => { outdatedMap[o.name] = o; });
+
+    document.querySelectorAll('#deps-tbody tr[data-pkg]').forEach(tr => {
+      const pkg = tr.getAttribute('data-pkg');
+      const cell = tr.querySelector('.outdated-cell');
+      const o = outdatedMap[pkg];
+      if (o) {
+        cell.innerHTML = `<span style="color:var(--yellow)">${esc(o.latest)}</span>`;
+        cell.title = 'Доступна более новая версия';
+      } else {
+        cell.innerHTML = `<span style="color:var(--green)">актуально</span>`;
+      }
+    });
+
+    const n = (result.outdated || []).length;
+    summary.textContent = n > 0
+      ? `⚠️ Устаревших пакетов: ${n} — проверено ${new Date(result.checkedAt).toLocaleString('ru-RU')}`
+      : `✅ Все пакеты актуальны — проверено ${new Date(result.checkedAt).toLocaleString('ru-RU')}`;
+    summary.style.color = n > 0 ? 'var(--yellow)' : 'var(--green)';
+  } catch (e) {
+    summary.textContent = '❌ ' + e.message;
+    summary.style.color = 'var(--red)';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = origText;
+  }
 }
 
 // ---------------- КАТЕГОРИИ УСТРОЙСТВ ----------------
@@ -2466,6 +2671,7 @@ function renderMaintenance() {
         <i class="ti ti-calendar-off"></i>
         <h3>Нет окон обслуживания</h3>
         <p>Создайте окно обслуживания чтобы временно приостановить алерты для устройств во время плановых работ.</p>
+        ${CURRENT_ROLE !== 'viewer' ? "<button class=\"empty-action\" onclick=\"document.getElementById(&quot;add-mw-btn&quot;).click()\">+ Добавить окно</button>" : ''}
       </div>`;
     return;
   }
@@ -2595,3 +2801,395 @@ document.addEventListener('click', e => {
 if (typeof esc === 'undefined') {
   window.esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+
+/* ══════════════════════════════════════════════════════════
+   ДЕТАЛЬНАЯ СТРАНИЦА УСТРОЙСТВА
+══════════════════════════════════════════════════════════ */
+
+let _ddDeviceId  = null;
+let _ddData      = null;
+let _ddRange     = '24h';
+let _ddChartCtx  = null;
+
+// Открыть детальную страницу
+async function openDeviceDetail(deviceId) {
+  _ddDeviceId = deviceId;
+  _ddRange    = '24h';
+  document.getElementById('device-detail-overlay').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+  await loadDeviceDetail();
+}
+
+// Закрыть
+function closeDeviceDetail() {
+  document.getElementById('device-detail-overlay').classList.add('hidden');
+  document.body.style.overflow = '';
+  _ddDeviceId = null;
+  _ddData     = null;
+}
+
+// Загрузить данные
+async function loadDeviceDetail() {
+  if (!_ddDeviceId) return;
+  try {
+    _ddData = await api(`/api/device/${_ddDeviceId}/detail`).then(r => r.json());
+    renderDeviceDetail(_ddData);
+  } catch (e) {
+    console.error('loadDeviceDetail:', e);
+    toast('Ошибка загрузки данных устройства', 'error');
+  }
+}
+
+// Рендер
+function renderDeviceDetail(data) {
+  const { device, uptime, stats24h, history, incidents, topology, audit } = data;
+  const s = STATUS[device.id] || {};
+
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val ?? '—'; };
+  const setHTML = (id, val) => { const el = document.getElementById(id); if (el) el.innerHTML = val; };
+
+  // Шапка
+  set('dd-name', device.name);
+  document.getElementById('dd-subtitle').textContent =
+    [device.ip, device.location, device.categoryName].filter(Boolean).join(' · ');
+
+  // Статус-бейдж
+  const badge = document.getElementById('dd-status-badge');
+  if (badge) {
+    if (!device.monitored) {
+      badge.className = 'status-badge status-unknown'; badge.textContent = 'Не отслеживается';
+    } else if (s.online === true) {
+      badge.className = 'status-badge status-online'; badge.textContent = 'Online';
+    } else if (s.online === false) {
+      badge.className = 'status-badge status-offline'; badge.textContent = 'Offline';
+    } else {
+      badge.className = 'status-badge status-unknown'; badge.textContent = 'Нет данных';
+    }
+  }
+
+  // Кнопки
+  document.getElementById('dd-edit-btn').onclick = () => {
+    closeDeviceDetail();
+    openEditDevice(device.id);
+  };
+  document.getElementById('dd-check-btn').onclick = async () => {
+    const btn = document.getElementById('dd-check-btn');
+    const restore = btnLoading(btn);
+    try {
+      await api(`/api/status/${device.id}/check`, { method: 'POST' });
+      await loadDeviceDetail();
+    } finally { restore(); }
+  };
+
+  // Инфо-строки
+  const ipEl = document.getElementById('dd-ip');
+  if (ipEl) { ipEl.childNodes[0].textContent = device.ip || '—'; ipEl.dataset.copy = device.ip || ''; }
+  const macEl = document.getElementById('dd-mac');
+  if (macEl) { macEl.childNodes[0].textContent = device.mac || '—'; macEl.dataset.copy = device.mac || ''; }
+  set('dd-location', device.location || '—');
+  set('dd-type',     device.type     || '—');
+
+  const catEl = document.getElementById('dd-category');
+  if (catEl) {
+    catEl.innerHTML = device.categoryName
+      ? `<span class="cat-badge" style="background:${device.categoryColor}22;color:${device.categoryColor}">${esc(device.categoryName)}</span>`
+      : '—';
+  }
+  set('dd-source',  device.source   || '—');
+  set('dd-created', device.createdAt ? new Date(device.createdAt).toLocaleDateString('ru-RU') : '—');
+
+  const commentRow = document.getElementById('dd-comment-row');
+  if (device.comment) {
+    commentRow.style.display = '';
+    set('dd-comment', device.comment);
+  } else {
+    commentRow.style.display = 'none';
+  }
+
+  // Мониторинг
+  set('dd-interval',   device.monitored ? `${device.checkInterval} сек` : 'Выключен');
+  set('dd-last-check', s.lastChecked ? fmtRelativeTime(s.lastChecked) : '—');
+  set('dd-alerts',     device.alertsEnabled ? 'Включены' : 'Выключены');
+
+  // Аптайм
+  const fmtUp = v => v === null ? '—' : v + '%';
+  const cls = v => v === null ? 'dd-uptime-na' : v >= 99 ? 'dd-uptime-good' : v >= 95 ? 'dd-uptime-warn' : 'dd-uptime-bad';
+
+  ['1h','24h','7d','30d'].forEach(k => {
+    const el = document.getElementById(`dd-up-${k}`);
+    const key = k === '1h' ? 'h1' : k === '24h' ? 'h24' : k === '7d' ? 'd7' : 'd30';
+    if (el) { el.textContent = fmtUp(uptime[key]); el.className = 'dd-uptime-val ' + cls(uptime[key]); }
+  });
+
+  set('dd-checks', stats24h.totalChecks || '0');
+  set('dd-ok',     stats24h.successChecks || '0');
+  set('dd-fail',   stats24h.failChecks || '0');
+
+  // График
+  renderDDChart(history, _ddRange);
+
+  // Инциденты
+  const incCard = document.getElementById('dd-incidents-card');
+  const incList = document.getElementById('dd-incidents-list');
+  if (incidents.length) {
+    incCard.style.display = '';
+    incList.innerHTML = incidents.map(i => `
+      <div class="dd-incident-row">
+        <span class="${i.open ? 'dd-incident-open' : 'dd-incident-closed'}">
+          ${i.open ? '🔴 Открыт' : '✓ Закрыт'}${i.escalated ? ' ⚡' : ''}
+        </span>
+        <span>${new Date(i.start).toLocaleDateString('ru-RU', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>
+        <span class="dd-incident-dur">${fmtDuration(i.durationSec)}</span>
+      </div>`).join('');
+  } else {
+    incCard.style.display = '';
+    incList.innerHTML = '<div style="padding:12px 16px;font-size:12px;color:var(--text-dim)">Инцидентов нет</div>';
+  }
+
+  // Топология
+  const topoList = document.getElementById('dd-topo-list');
+  if (topology.edges.length) {
+    topoList.innerHTML = topology.edges.map(e => {
+      const isFrom = e.from.id === device.id;
+      const peer   = isFrom ? e.to : e.from;
+      const dir    = isFrom ? '→' : '←';
+      return `<div class="dd-topo-row" onclick="closeDeviceDetail();openDeviceDetail('${peer.id}')">
+        <span class="dd-topo-dir">${dir}</span>
+        <span class="dd-topo-name">${esc(peer.name)}</span>
+        <span class="dd-topo-ip">${esc(peer.ip || '')}</span>
+        <span class="dd-topo-iface">${esc(e.iface || e.label || '')}</span>
+      </div>`;
+    }).join('');
+  } else {
+    topoList.innerHTML = '<div style="padding:12px 16px;font-size:12px;color:var(--text-dim)">Нет связей на карте</div>';
+  }
+
+  // Аудит
+  const auditCard = document.getElementById('dd-audit-card');
+  const auditList = document.getElementById('dd-audit-list');
+  if (audit.length) {
+    auditCard.style.display = '';
+    auditList.innerHTML = audit.map(a => `
+      <div class="dd-audit-row">
+        <span class="dd-audit-time">${new Date(a.t).toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit'})}</span>
+        <span class="dd-audit-action">${esc(a.action)}</span>
+        <span class="dd-audit-user">${esc(a.user)}</span>
+      </div>`).join('');
+  } else {
+    auditCard.style.display = 'none';
+  }
+
+  // Порты
+  const portsCard = document.getElementById('dd-ports-card');
+  const portsList = document.getElementById('dd-ports-list');
+  const portChecks = device.portChecks || [];
+  const portStatus = (STATUS[device.id] || {}).ports || null;
+  if (portChecks.length) {
+    portsCard.style.display = '';
+    portsList.innerHTML = portChecks.map(pc => {
+      const ps = portStatus ? portStatus.find(p => String(p.port) === String(pc.port)) : null;
+      const open = ps ? ps.open : null;
+      return `<div class="dd-port-row">
+        <span class="dd-port-num">${pc.port}</span>
+        <span class="dd-port-label">${esc(pc.label || '')}</span>
+        <span class="${open === true ? 'dd-port-open' : open === false ? 'dd-port-closed' : ''}">
+          ${open === true ? 'Открыт' : open === false ? 'Закрыт' : '—'}
+        </span>
+      </div>`;
+    }).join('');
+  } else {
+    portsCard.style.display = 'none';
+  }
+}
+
+// ── График доступности на Canvas ──────────────────────────────────────
+function renderDDChart(history, range) {
+  const canvas = document.getElementById('dd-chart');
+  if (!canvas) return;
+
+  // Фильтруем по диапазону
+  const now    = Date.now();
+  const cutoff = range === '24h' ? now - 86400 * 1000 : now - 7 * 86400 * 1000;
+  const pts    = history.filter(p => p.t >= cutoff);
+
+  const dpr = window.devicePixelRatio || 1;
+  const W   = canvas.parentElement.clientWidth - 32;
+  const H   = 80;
+  canvas.width  = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width  = W + 'px';
+  canvas.style.height = H + 'px';
+
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, W, H);
+
+  if (!pts.length) {
+    ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--text-dim').trim() || '#64748b';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Нет данных за выбранный период', W / 2, H / 2);
+    return;
+  }
+
+  const green  = '#22c55e';
+  const red    = '#ef4444';
+  const barW   = Math.max(2, Math.floor(W / pts.length) - 1);
+  const barGap = Math.max(1, Math.floor(W / pts.length));
+
+  pts.forEach((p, i) => {
+    const x = i * barGap;
+    ctx.fillStyle = p.online ? green : red;
+    ctx.fillRect(x, p.online ? H * 0.2 : H * 0.5, barW, p.online ? H * 0.6 : H * 0.35);
+  });
+}
+
+// ── Переключение диапазона графика ────────────────────────────────────
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.dd-range-btn');
+  if (!btn || !_ddData) return;
+  document.querySelectorAll('.dd-range-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _ddRange = btn.dataset.range;
+  renderDDChart(_ddData.history, _ddRange);
+});
+
+// ── ESC закрывает детальную страницу ─────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && _ddDeviceId) closeDeviceDetail();
+});
+
+// ── Вспомогательные форматтеры ────────────────────────────────────────
+function fmtDuration(sec) {
+  if (!sec) return '0 сек';
+  if (sec < 60)   return sec + ' сек';
+  if (sec < 3600) return Math.floor(sec / 60) + ' мин';
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  return h + 'ч ' + (m ? m + 'м' : '');
+}
+
+function fmtRelativeTime(ts) {
+  const diff = Date.now() - ts;
+  if (diff < 60000)   return 'только что';
+  if (diff < 3600000) return Math.floor(diff / 60000) + ' мин назад';
+  if (diff < 86400000)return Math.floor(diff / 3600000) + ' ч назад';
+  return new Date(ts).toLocaleDateString('ru-RU');
+}
+
+// ── Кнопки "Подробнее" в карточках устройств ─────────────────────────
+// Добавляем кнопку в renderDeviceCards и renderDevicesTable
+const _origRenderDeviceCards = window.renderDeviceCards;
+
+/* ══════════════════════════════════════════════════════════
+   ГОРЯЧИЕ КЛАВИШИ
+══════════════════════════════════════════════════════════ */
+
+document.addEventListener('keydown', e => {
+  // Не срабатывают в полях ввода и модалках
+  const tag = document.activeElement?.tagName;
+  if (['INPUT','TEXTAREA','SELECT'].includes(tag)) return;
+  if (!document.querySelector('.modal-overlay:not(.hidden)') === false) return;
+  if (_ddDeviceId) return; // детальная страница открыта — ESC обрабатывается там
+
+  switch (e.key) {
+    case 'n': case 'N':
+      // N — новое устройство
+      if (CURRENT_ROLE !== 'viewer') { e.preventDefault(); showTab('devices'); openAdd(); }
+      break;
+
+    case '/':
+      // / — фокус на поиск
+      e.preventDefault();
+      const searchInput = document.querySelector('.tab.active input[type="text"][id$="-search"], .tab.active input[placeholder*="поиск" i], .tab.active input[placeholder*="Поиск" i], #device-search');
+      if (searchInput) { searchInput.focus(); searchInput.select(); }
+      break;
+
+    case 'm': case 'M':
+      // M — перейти на карту
+      e.preventDefault();
+      showTab('map');
+      break;
+
+    case 'd': case 'D':
+      // D — перейти на дашборд
+      e.preventDefault();
+      showTab('dashboard');
+      break;
+
+    case 's': case 'S':
+      // S — перейти в настройки (только admin/operator)
+      if (CURRENT_ROLE !== 'viewer') { e.preventDefault(); showTab('settings'); }
+      break;
+
+    case '?':
+      // ? — показать справку по клавишам
+      e.preventDefault();
+      showHotkeysHelp();
+      break;
+
+    case 'Escape':
+      // ESC — закрыть любую открытую модалку
+      document.querySelectorAll('.modal-overlay:not(.hidden)').forEach(m => m.classList.add('hidden'));
+      break;
+  }
+});
+
+// ── Справка по горячим клавишам ───────────────────────────────────────
+function showHotkeysHelp() {
+  // Создаём модалку если нет
+  let modal = document.getElementById('hotkeys-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'hotkeys-modal';
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+      <div class="modal" style="width:420px">
+        <h2>Горячие клавиши</h2>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <tbody>
+            ${[
+              ['N', 'Новое устройство'],
+              ['/', 'Фокус на поиск'],
+              ['D', 'Дашборд'],
+              ['M', 'Карта сети'],
+              ['S', 'Настройки'],
+              ['?', 'Эта справка'],
+              ['Esc', 'Закрыть / Назад'],
+            ].map(([k, v]) => `<tr>
+              <td style="padding:8px 12px;border-bottom:1px solid var(--border)">
+                <kbd style="background:var(--panel-2);border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-family:monospace;font-size:12px;">${k}</kbd>
+              </td>
+              <td style="padding:8px 12px;border-bottom:1px solid var(--border);color:var(--text-dim)">${v}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+        <div class="modal-actions" style="margin-top:16px">
+          <button class="btn-primary" onclick="document.getElementById('hotkeys-modal').classList.add('hidden')">Закрыть</button>
+        </div>
+      </div>`;
+    modal.addEventListener('click', e => { if (e.target === modal) modal.classList.add('hidden'); });
+    document.body.appendChild(modal);
+  }
+  modal.classList.remove('hidden');
+}
+
+// ── Подсказка ? в правом нижнем углу ─────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const hint = document.createElement('button');
+  hint.title   = 'Горячие клавиши (?)';
+  hint.onclick = showHotkeysHelp;
+  hint.style.cssText = `
+    position:fixed; bottom:20px; right:20px; z-index:70;
+    width:32px; height:32px; border-radius:50%;
+    background:var(--panel); border:1px solid var(--border);
+    color:var(--text-dim); font-size:15px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    transition:all .15s; box-shadow:0 2px 8px rgba(0,0,0,.2);
+  `;
+  hint.innerHTML = '?';
+  hint.addEventListener('mouseenter', () => { hint.style.borderColor = 'var(--accent)'; hint.style.color = 'var(--accent)'; });
+  hint.addEventListener('mouseleave', () => { hint.style.borderColor = 'var(--border)'; hint.style.color = 'var(--text-dim)'; });
+  document.body.appendChild(hint);
+});
+

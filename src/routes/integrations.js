@@ -47,7 +47,7 @@ async function refreshOuiDatabase() {
     fs.writeFileSync(OUI_FILE,JSON.stringify({updatedAt:ouiUpdatedAt,entries:ouiTable}));
     console.log(`OUI обновлена: ${count} записей`);
     return { ok:true, count };
-  } catch(err) { ouiLastError=err.message; console.error('⚠ OUI:',err.message); return { ok:false, message:err.message }; }
+  } catch(err) { ouiLastError=err.message; console.error('[OUI]',err.message); return { ok:false, message:err.message }; }
 }
 function lookupVendor(mac) {
   if (!mac) return null;

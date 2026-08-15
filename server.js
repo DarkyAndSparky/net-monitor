@@ -10,10 +10,11 @@ const https    = require('https');
 const os       = require('os');
 
 // ── Инициализация БД и планировщика ──────────────────────────────────
-require('./src/db');
+const { db } = require('./src/db');
 require('./src/services/scheduler');
 
 const log = require('./src/services/logger');
+const { requireAdmin } = require('./src/middleware/auth');
 const app = express();
 
 // ── Порты: HTTPS 9221, HTTP→HTTPS редирект 9222 ──────────────────────
@@ -92,6 +93,70 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// ── Полная информация «О системе» ────────────────────────────────────
+app.get('/api/system-info', requireAdmin, (req, res) => {
+  try {
+    const pkg = getPackageJson();
+
+    const resolveInstalledVersion = (name) => {
+      if (name === 'node:sqlite') return process.version.replace('v', '');
+      try { return require(`${name}/package.json`).version; } catch { return null; }
+    };
+
+    const deps = Object.entries(pkg.dependencies || {}).map(([name, range]) => ({
+      name, range, installed: resolveInstalledVersion(name),
+    }));
+
+    const counts = {
+      devices:   db.prepare('SELECT COUNT(*) as c FROM devices').get().c,
+      monitored: db.prepare('SELECT COUNT(*) as c FROM devices WHERE monitored=1').get().c,
+      users:     db.prepare('SELECT COUNT(*) as c FROM users').get().c,
+    };
+
+    let dbSizeBytes = 0;
+    try { dbSizeBytes = fs.statSync(path.join(DATA_DIR, 'netmonitor.db')).size; } catch {}
+
+    res.json({
+      version:     APP_VERSION,
+      name:        pkg.name,
+      description: pkg.description || '',
+      license:     pkg.license || 'MIT',
+      author:      pkg.author || 'DarkyAndSparky',
+      repository:  (pkg.repository && (pkg.repository.url || pkg.repository)) || 'https://github.com/DarkyAndSparky/net-monitor',
+      node:        process.version,
+      platform:    process.platform,
+      arch:        process.arch,
+      uptimeSec:   Math.floor(process.uptime()),
+      memoryMB:    Math.round(process.memoryUsage().rss / 1024 / 1024),
+      pid:         process.pid,
+      dependencies: deps,
+      counts,
+      dbSizeBytes,
+      env: process.env.NODE_ENV || 'production',
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Проверка устаревших пакетов через npm outdated (по требованию) ───
+app.get('/api/system-info/outdated', requireAdmin, (req, res) => {
+  const { execFile } = require('child_process');
+  execFile('npm', ['outdated', '--json'], { cwd: __dirname, timeout: 20000 }, (err, stdout) => {
+    // npm outdated возвращает код 1 если нашёл устаревшие пакеты — это не ошибка.
+    // Реальная проблема — когда stdout вообще не парсится (нет интернета/npm недоступен).
+    try {
+      const data = JSON.parse(stdout || '{}');
+      const outdated = Object.entries(data).map(([name, info]) => ({
+        name, current: info.current || null, wanted: info.wanted, latest: info.latest,
+      }));
+      res.json({ outdated, checkedAt: new Date().toISOString() });
+    } catch {
+      res.status(503).json({ error: 'Не удалось проверить обновления (нет интернета или npm недоступен)' });
+    }
+  });
+});
+
 // Скачать LICENSE как txt
 app.get('/api/license', (req, res) => {
   const licPath = path.join(__dirname, 'LICENSE');
@@ -114,6 +179,7 @@ app.use('/api/discovery',    require('./src/routes/discovery'));
 app.use(                     require('./src/routes/metrics'));
 app.use('/api',              require('./src/routes/sse'));
 app.use('/api/maintenance',  require('./src/routes/maintenance'));
+app.use('/api/device',       require('./src/routes/device-detail'));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── Определяем локальный IP ───────────────────────────────────────────
@@ -133,7 +199,7 @@ function printBanner(useHttps, httpsPort, httpPort, localIP) {
   const port  = useHttps ? httpsPort : httpPort;
   const lines = [
     '',
-    `  🚀  net-monitor — сервер запущен`,
+    `  net-monitor — сервер запущен`,
     `  ${L}`,
     `  Протокол:    ${useHttps ? 'HTTPS' : 'HTTP'}`,
     `  Локально:    ${proto}://localhost:${port}`,
@@ -147,10 +213,10 @@ function printBanner(useHttps, httpsPort, httpPort, localIP) {
     `  Версия:      ${APP_VERSION}  (Node.js ${process.version})`,
     `  ${L}`,
     useHttps
-      ? `  ⚠  Браузер покажет предупреждение о сертификате.`
-      : `  💡 Для HTTPS запусти make-cert.bat и перезапусти сервер.`,
+      ? `  [!] Браузер покажет предупреждение о сертификате.`
+      : `  [i] Для HTTPS запусти make-cert.bat и перезапусти сервер.`,
     useHttps ? `     Нажми «Дополнительно» → «Перейти на сайт»` : null,
-    useHttps ? `  📄 Сертификат: ${CERT_FILE}` : null,
+    useHttps ? `  Сертификат: ${CERT_FILE}` : null,
     `  ${L}`,
     '',
   ].filter(l => l !== null).join('\n');

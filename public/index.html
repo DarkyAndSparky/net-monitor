@@ -50,7 +50,7 @@
           </a>
         </div>
         <div class="sidebar-meta-license">
-          <a href="/api/license" download="LICENSE.txt" class="sidebar-meta-mit">Лицензия MIT</a>
+          <a href="#" onclick="downloadLicense();return false;" class="sidebar-meta-mit">Лицензия MIT</a>
           <span class="sidebar-meta-dot">·</span>
           <span class="sidebar-meta-author">DarkyAndSparky</span>
         </div>
@@ -316,7 +316,7 @@
         <button class="settings-tab-btn admin-only" data-settings-tab="io">⇅ Импорт/Экспорт</button>
         <button class="settings-tab-btn admin-only" data-settings-tab="audit">📜 Аудит-лог</button>
         <button class="settings-tab-btn" data-settings-tab="profile">🔑 Профиль</button>
-        <button class="settings-tab-btn" data-settings-tab="about">ℹ О системе</button>
+        <button class="settings-tab-btn admin-strict" data-settings-tab="about">ℹ О системе</button>
       </div>
 
       <!-- ВНЕШНИЙ ВИД -->
@@ -617,116 +617,11 @@
 
       <!-- О СИСТЕМЕ -->
       <div class="settings-subtab hidden" data-settings-panel="about">
-
-        <!-- Приложение -->
-        <div class="sysinfo-card">
-          <div class="sysinfo-card-title"><span class="sysinfo-icon">📡</span> net-monitor</div>
-          <div class="sysinfo-row"><span class="sysinfo-label">Версия</span><span class="sysinfo-val sysinfo-version" id="about-version">—</span></div>
-          <div class="sysinfo-row"><span class="sysinfo-label">Описание</span><span class="sysinfo-val">Self-hosted система мониторинга локальной сети</span></div>
-          <div class="sysinfo-row"><span class="sysinfo-label">Лицензия</span><span class="sysinfo-val"><a href="/api/license" download="LICENSE.txt" class="sysinfo-link">MIT ↓</a></span></div>
-          <div class="sysinfo-row"><span class="sysinfo-label">Автор</span><span class="sysinfo-val">DarkyAndSparky</span></div>
-          <div class="sysinfo-row"><span class="sysinfo-label">Репозиторий</span><span class="sysinfo-val"><a href="https://github.com/DarkyAndSparky/net-monitor" target="_blank" rel="noopener" class="sysinfo-link">github.com/DarkyAndSparky/net-monitor</a></span></div>
+        <div id="about-page-content" style="max-width:900px">
+          <div style="color:var(--text-dim);font-size:13px">Загрузка…</div>
         </div>
-
-        <!-- Окружение -->
-        <div class="sysinfo-card">
-          <div class="sysinfo-card-title"><span class="sysinfo-icon">🖥</span> Окружение</div>
-          <div class="sysinfo-row"><span class="sysinfo-label">Node.js</span><span class="sysinfo-val" id="ai-node">—</span></div>
-          <div class="sysinfo-row"><span class="sysinfo-label">Платформа</span><span class="sysinfo-val" id="ai-platform">—</span></div>
-          <div class="sysinfo-row"><span class="sysinfo-label">Время работы</span><span class="sysinfo-val" id="ai-uptime">—</span></div>
-          <div class="sysinfo-row"><span class="sysinfo-label">Память процесса</span><span class="sysinfo-val" id="ai-memory">—</span></div>
-          <div class="sysinfo-row"><span class="sysinfo-label">Время сервера</span><span class="sysinfo-val" id="ai-time">—</span></div>
-        </div>
-
-        <!-- Данные -->
-        <div class="sysinfo-card">
-          <div class="sysinfo-card-title"><span class="sysinfo-icon">🗄</span> Данные</div>
-          <div class="sysinfo-counters">
-            <div class="sysinfo-counter"><span class="sysinfo-counter-num" id="ai-devices">—</span><span class="sysinfo-counter-label">устройств</span></div>
-            <div class="sysinfo-counter"><span class="sysinfo-counter-num" id="ai-monitored">—</span><span class="sysinfo-counter-label">мониторится</span></div>
-            <div class="sysinfo-counter"><span class="sysinfo-counter-num" id="ai-online">—</span><span class="sysinfo-counter-label">онлайн</span></div>
-            <div class="sysinfo-counter"><span class="sysinfo-counter-num" id="ai-users">—</span><span class="sysinfo-counter-label">пользователей</span></div>
-          </div>
-        </div>
-
-        <!-- Зависимости -->
-        <div class="sysinfo-card">
-          <div class="sysinfo-card-title"><span class="sysinfo-icon">📦</span> Зависимости <span id="ai-deps-count" style="font-size:12px;font-weight:400;color:var(--text-dim)"></span></div>
-          <table class="sysinfo-deps-table">
-            <thead><tr><th>Пакет</th><th>Установлено</th><th>В package.json</th></tr></thead>
-            <tbody id="ai-deps-tbody">
-              <tr><td colspan="3" style="color:var(--text-dim);text-align:center;padding:12px">Загрузка...</td></tr>
-            </tbody>
-          </table>
-        </div>
-
       </div>
-
-      <!-- Системная информация -->
-      <div class="about-section-label">Системная информация</div>
-      <div class="about-info-grid" id="about-info-grid">
-        <div class="about-info-row"><span class="about-info-key">Версия приложения</span><span class="about-info-val" id="ai-version">—</span></div>
-        <div class="about-info-row"><span class="about-info-key">Node.js</span><span class="about-info-val" id="ai-node">—</span></div>
-        <div class="about-info-row"><span class="about-info-key">SQLite</span><span class="about-info-val">node:sqlite (встроенный)</span></div>
-        <div class="about-info-row"><span class="about-info-key">Аптайм сервера</span><span class="about-info-val" id="ai-uptime">—</span></div>
-        <div class="about-info-row"><span class="about-info-key">Время сервера</span><span class="about-info-val" id="ai-time">—</span></div>
-        <div class="about-info-row"><span class="about-info-key">База данных</span><span class="about-info-val">data/netmonitor.db</span></div>
-      </div>
-
-      <!-- Зависимости -->
-      <div class="about-section-label">Зависимости (backend)</div>
-      <div class="about-deps-grid" id="about-deps-backend">
-        <div class="about-dep-card"><span class="dep-name">express</span><span class="dep-ver">^4.19</span><span class="dep-desc">HTTP-сервер</span></div>
-        <div class="about-dep-card"><span class="dep-name">express-session</span><span class="dep-ver">^1.18</span><span class="dep-desc">Сессии</span></div>
-        <div class="about-dep-card"><span class="dep-name">node:sqlite</span><span class="dep-ver">встроен</span><span class="dep-desc">SQLite (без компиляции)</span></div>
-        <div class="about-dep-card"><span class="dep-name">pino</span><span class="dep-ver">^9.3</span><span class="dep-desc">Структурированные логи</span></div>
-        <div class="about-dep-card"><span class="dep-name">node-routeros</span><span class="dep-ver">^1.6</span><span class="dep-desc">MikroTik API</span></div>
-        <div class="about-dep-card"><span class="dep-name">net-snmp</span><span class="dep-ver">^3.0</span><span class="dep-desc">SNMP опрос</span></div>
-        <div class="about-dep-card"><span class="dep-name">ssh2</span><span class="dep-ver">^1.15</span><span class="dep-desc">Cisco SSH</span></div>
-      </div>
-
-      <div class="about-section-label">Технологии (frontend)</div>
-      <div class="about-deps-grid">
-        <div class="about-dep-card"><span class="dep-name">Vanilla JS</span><span class="dep-ver">ES2020+</span><span class="dep-desc">Без фреймворков</span></div>
-        <div class="about-dep-card"><span class="dep-name">SVG</span><span class="dep-ver">нативный</span><span class="dep-desc">Карта сети</span></div>
-        <div class="about-dep-card"><span class="dep-name">EventSource</span><span class="dep-ver">нативный</span><span class="dep-desc">SSE / live-обновления</span></div>
-        <div class="about-dep-card"><span class="dep-name">Tabler Icons</span><span class="dep-ver">3.19</span><span class="dep-desc">SVG иконки (CDN)</span></div>
-        <div class="about-dep-card"><span class="dep-name">CSS Variables</span><span class="dep-ver">нативный</span><span class="dep-desc">Тёмная / светлая тема</span></div>
-      </div>
-
-      <!-- MIT Лицензия -->
-      <div class="about-section-label">License</div>
-      <div class="about-license-block">
-        <div class="about-license-header">
-          <span class="about-license-badge">MIT License</span>
-          <span class="about-license-year">Copyright © 2026 DarkyAndSparky</span>
-        </div>
-        <p class="about-license-text">
-          Permission is hereby granted, free of charge, to any person obtaining a copy
-          of this software and associated documentation files (the "Software"), to deal
-          in the Software without restriction, including without limitation the rights
-          to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-          copies of the Software, and to permit persons to whom the Software is
-          furnished to do so, subject to the following conditions: The above copyright
-          notice and this permission notice shall be included in all copies or
-          substantial portions of the Software.
-        </p>
-        <p class="about-license-text" style="opacity:.6; font-size:11px; margin-top:6px;">
-          THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-          IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-          FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-          AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-          LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-          OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-          THE SOFTWARE.
-        </p>
-        <a class="about-license-link" href="/api/license" download="LICENSE.txt">
-          ⬇ Download LICENSE.txt
-        </a>
-      </div>
-
-      </div>
-    </section>
+</section>
 
   </main>
 </div>
@@ -837,5 +732,118 @@
 </div>
 
 <script src="app.js"></script>
+<!-- ══ ДЕТАЛЬНАЯ СТРАНИЦА УСТРОЙСТВА ══ -->
+<div id="device-detail-overlay" class="dd-overlay hidden">
+  <div class="dd-panel">
+
+    <!-- Шапка -->
+    <div class="dd-header">
+      <div class="dd-header-left">
+        <button class="dd-back-btn" onclick="closeDeviceDetail()">
+          <i class="ti ti-arrow-left"></i>
+        </button>
+        <div>
+          <div class="dd-title" id="dd-name">—</div>
+          <div class="dd-subtitle" id="dd-subtitle">—</div>
+        </div>
+      </div>
+      <div class="dd-header-actions">
+        <span class="status-badge" id="dd-status-badge">—</span>
+        <button class="btn-secondary" id="dd-edit-btn"><i class="ti ti-edit"></i> Редактировать</button>
+        <button class="btn-primary dd-check-btn" id="dd-check-btn"><i class="ti ti-refresh"></i> Проверить</button>
+      </div>
+    </div>
+
+    <div class="dd-body">
+      <!-- Левая колонка -->
+      <div class="dd-col-left">
+
+        <!-- Карточка: инфо -->
+        <div class="dd-card">
+          <div class="dd-card-title"><i class="ti ti-info-circle"></i> Информация</div>
+          <div class="dd-info-row"><span>IP-адрес</span><span id="dd-ip" class="copyable" data-copy=""><i class="ti ti-copy copy-icon"></i></span></div>
+          <div class="dd-info-row"><span>MAC-адрес</span><span id="dd-mac" class="copyable" data-copy=""><i class="ti ti-copy copy-icon"></i></span></div>
+          <div class="dd-info-row"><span>Расположение</span><span id="dd-location">—</span></div>
+          <div class="dd-info-row"><span>Тип</span><span id="dd-type">—</span></div>
+          <div class="dd-info-row"><span>Категория</span><span id="dd-category">—</span></div>
+          <div class="dd-info-row"><span>Источник</span><span id="dd-source">—</span></div>
+          <div class="dd-info-row"><span>Добавлено</span><span id="dd-created">—</span></div>
+          <div class="dd-info-row" id="dd-comment-row" style="display:none"><span>Комментарий</span><span id="dd-comment">—</span></div>
+        </div>
+
+        <!-- Карточка: мониторинг -->
+        <div class="dd-card">
+          <div class="dd-card-title"><i class="ti ti-activity"></i> Мониторинг</div>
+          <div class="dd-info-row"><span>Интервал</span><span id="dd-interval">—</span></div>
+          <div class="dd-info-row"><span>Последняя проверка</span><span id="dd-last-check">—</span></div>
+          <div class="dd-info-row"><span>Алерты</span><span id="dd-alerts">—</span></div>
+        </div>
+
+        <!-- Карточка: топология -->
+        <div class="dd-card" id="dd-topo-card">
+          <div class="dd-card-title"><i class="ti ti-topology-star"></i> Связи</div>
+          <div id="dd-topo-list"><span class="hint">Нет связей</span></div>
+        </div>
+
+        <!-- Карточка: аудит -->
+        <div class="dd-card" id="dd-audit-card" style="display:none">
+          <div class="dd-card-title"><i class="ti ti-clipboard-list"></i> Последние действия</div>
+          <div id="dd-audit-list"></div>
+        </div>
+
+      </div>
+
+      <!-- Правая колонка -->
+      <div class="dd-col-right">
+
+        <!-- Карточка: аптайм -->
+        <div class="dd-card">
+          <div class="dd-card-title"><i class="ti ti-chart-bar"></i> Аптайм</div>
+          <div class="dd-uptime-grid">
+            <div class="dd-uptime-cell"><div class="dd-uptime-val" id="dd-up-1h">—</div><div class="dd-uptime-label">1 час</div></div>
+            <div class="dd-uptime-cell"><div class="dd-uptime-val" id="dd-up-24h">—</div><div class="dd-uptime-label">24 часа</div></div>
+            <div class="dd-uptime-cell"><div class="dd-uptime-val" id="dd-up-7d">—</div><div class="dd-uptime-label">7 дней</div></div>
+            <div class="dd-uptime-cell"><div class="dd-uptime-val" id="dd-up-30d">—</div><div class="dd-uptime-label">30 дней</div></div>
+          </div>
+          <div class="dd-stats-row">
+            <span>Проверок за 24ч: <b id="dd-checks">—</b></span>
+            <span>Успешных: <b id="dd-ok" style="color:var(--green)">—</b></span>
+            <span>Неудач: <b id="dd-fail" style="color:var(--red)">—</b></span>
+          </div>
+        </div>
+
+        <!-- Карточка: график -->
+        <div class="dd-card">
+          <div class="dd-card-title">
+            <i class="ti ti-chart-line"></i> История доступности
+            <div class="dd-range-btns">
+              <button class="dd-range-btn active" data-range="24h">24ч</button>
+              <button class="dd-range-btn" data-range="7d">7д</button>
+            </div>
+          </div>
+          <canvas id="dd-chart" height="80"></canvas>
+          <div class="dd-chart-legend">
+            <span class="dd-chart-online">■ Online</span>
+            <span class="dd-chart-offline">■ Offline</span>
+          </div>
+        </div>
+
+        <!-- Карточка: инциденты -->
+        <div class="dd-card" id="dd-incidents-card">
+          <div class="dd-card-title"><i class="ti ti-alert-triangle"></i> Инциденты</div>
+          <div id="dd-incidents-list"><span class="hint">Нет инцидентов или модуль отключён</span></div>
+        </div>
+
+        <!-- Карточка: порты -->
+        <div class="dd-card" id="dd-ports-card" style="display:none">
+          <div class="dd-card-title"><i class="ti ti-plug"></i> TCP-порты</div>
+          <div id="dd-ports-list"></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

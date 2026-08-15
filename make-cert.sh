@@ -5,7 +5,7 @@ set -e
 cd "$(dirname "$0")"
 
 if ! command -v openssl &> /dev/null; then
-  echo "❌ openssl не найден. Установите его (обычно уже есть в Linux/macOS; в Ubuntu: sudo apt install openssl)."
+  echo "[ERROR] openssl не найден. Установите его (обычно уже есть в Linux/macOS; в Ubuntu: sudo apt install openssl)."
   exit 1
 fi
 
@@ -33,10 +33,10 @@ openssl req -x509 -nodes -newkey rsa:2048 \
 chmod 600 data/certs/key.pem
 
 echo ""
-echo "✅ Готово: data/certs/cert.pem и data/certs/key.pem"
+echo "[OK] Готово: data/certs/cert.pem и data/certs/key.pem"
 echo "Перезапустите сервер (./start.sh) — он сам обнаружит сертификат и включит HTTPS."
 echo ""
-echo "⚠️  Это самоподписанный сертификат — браузер один раз покажет предупреждение"
+echo "[!] Это самоподписанный сертификат — браузер один раз покажет предупреждение"
 echo "    «соединение не защищено» / «сертификату не доверяют». Это нормально для"
 echo "    локальной сети без внешнего домена — просто подтвердите переход один раз"
 echo "    (или добавьте cert.pem в доверенные на устройствах, если хотите убрать предупреждение)."
