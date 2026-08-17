@@ -83,9 +83,15 @@ async function routerOsQuery(cfg, command) {
 router.get('/mikrotik/routers', requireAuth, (req,res) =>
   res.json((getSetting('mikrotiks')||[]).map(r=>({...r,password:r.password?'••••••••':''})))
 );
+function parseTrafficIfaces(input) {
+  if (Array.isArray(input)) return input.map(s => String(s).trim()).filter(Boolean);
+  if (typeof input === 'string') return input.split(',').map(s => s.trim()).filter(Boolean);
+  return [];
+}
+
 router.post('/mikrotik/routers', requireAdmin, (req,res) => {
   const list=getSetting('mikrotiks')||[];
-  const router={id:newId('r'),name:req.body.name||req.body.host||'MikroTik',host:req.body.host||'',port:Number(req.body.port)||8728,user:req.body.user||'admin',password:req.body.password||'',useTls:!!req.body.useTls};
+  const router={id:newId('r'),name:req.body.name||req.body.host||'MikroTik',host:req.body.host||'',port:Number(req.body.port)||8728,user:req.body.user||'admin',password:req.body.password||'',useTls:!!req.body.useTls,trafficInterfaces:parseTrafficIfaces(req.body.trafficInterfaces)};
   list.push(router); setSetting('mikrotiks',list); logAudit(req,'mikrotik_router.add',router.name);
   res.json({...router,password:router.password?'••••••••':''});
 });
@@ -94,6 +100,7 @@ router.put('/mikrotik/routers/:id', requireAdmin, (req,res) => {
   if (!r) return res.status(404).json({error:'not_found'});
   r.name=req.body.name??r.name; r.host=req.body.host??r.host; r.port=req.body.port!=null?Number(req.body.port):r.port;
   r.user=req.body.user??r.user; r.useTls=req.body.useTls!=null?!!req.body.useTls:r.useTls;
+  if (req.body.trafficInterfaces!==undefined) r.trafficInterfaces=parseTrafficIfaces(req.body.trafficInterfaces);
   if (req.body.password&&req.body.password!=='••••••••') r.password=req.body.password;
   setSetting('mikrotiks',list); res.json({...r,password:r.password?'••••••••':''});
 });

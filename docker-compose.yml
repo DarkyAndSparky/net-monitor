@@ -12,6 +12,7 @@ services:
       - PORT=9221
       - HTTP_REDIRECT_PORT=9222
       # - METRICS_TOKEN=секрет   # раскомментировать для защиты /metrics
+      # - RATE_LIMIT_DISABLED=true   # отключить rate limiting (только для отладки!)
     network_mode: host   # нужен для ping в локальной сети
     cap_add:
       - NET_RAW

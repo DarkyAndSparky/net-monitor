@@ -55,7 +55,7 @@ async function checkDevicePorts(device) {
 let snmpLib = null; try { snmpLib = require('net-snmp'); } catch {}
 
 function pollSnmp(device) {
-  if (!snmpLib) { logger.warn('net-snmp не установлен, SNMP опрос недоступен'); snmpCache[device.id]={ error:'net-snmp не установлен', lastChecked:Date.now() }; return Promise.resolve(); }
+  if (!snmpLib) { log.warn('net-snmp не установлен, SNMP опрос недоступен'); snmpCache[device.id]={ error:'net-snmp не установлен', lastChecked:Date.now() }; return Promise.resolve(); }
   return new Promise(resolve => {
     const session = snmpLib.createSession(device.ip, device.snmp_community||'public', { port:device.snmp_port||161, timeout:2000, retries:0 });
     session.get(['1.3.6.1.2.1.1.3.0','1.3.6.1.4.1.14988.1.1.3.14.0'], (err, vb) => {
@@ -66,6 +66,124 @@ function pollSnmp(device) {
     });
   });
 }
+
+// ── Трафик: SNMP (устройства) ─────────────────────────────────────────
+// ifOctets — 32-битный счётчик, накопительный. Считаем дельту между двумя
+// опросами и переводим в bps. Требует поле snmp_if_index у устройства.
+const trafficRawCache = {}; // key(device.id) -> { ts, rxBytes, txBytes }
+
+function snmpGetIfOctets(device) {
+  if (!snmpLib) return Promise.resolve(null);
+  const idx = device.snmp_if_index;
+  if (idx == null) return Promise.resolve(null);
+  return new Promise(resolve => {
+    const session = snmpLib.createSession(device.ip, device.snmp_community||'public', { port:device.snmp_port||161, timeout:2000, retries:0 });
+    const inOid  = `1.3.6.1.2.1.2.2.1.10.${idx}`;
+    const outOid = `1.3.6.1.2.1.2.2.1.16.${idx}`;
+    session.get([inOid, outOid], (err, vb) => {
+      session.close();
+      if (err) return resolve(null);
+      const rx = !snmpLib.isVarbindError(vb[0]) ? Number(vb[0].value) : null;
+      const tx = !snmpLib.isVarbindError(vb[1]) ? Number(vb[1].value) : null;
+      resolve(rx != null && tx != null ? { rxBytes: rx, txBytes: tx } : null);
+    });
+  });
+}
+
+async function pollDeviceTraffic(device) {
+  const now = Date.now();
+  const reading = await snmpGetIfOctets(device);
+  if (!reading) return;
+
+  const key  = 'd:' + device.id;
+  const prev = trafficRawCache[key];
+  trafficRawCache[key] = { ts: now, ...reading };
+  if (!prev) return; // первый опрос — только запоминаем базовую точку
+
+  const elapsedSec = (now - prev.ts) / 1000;
+  if (elapsedSec < 1) return;
+
+  // Защита от переполнения 32-битного счётчика (wrap around ~4.3GB)
+  const deltaRx = reading.rxBytes >= prev.rxBytes ? reading.rxBytes - prev.rxBytes : reading.rxBytes;
+  const deltaTx = reading.txBytes >= prev.txBytes ? reading.txBytes - prev.txBytes : reading.txBytes;
+
+  const rxBps = Math.round((deltaRx * 8) / elapsedSec);
+  const txBps = Math.round((deltaTx * 8) / elapsedSec);
+
+  db.prepare('INSERT INTO traffic_history (source_type,source_id,iface,ts,rx_bps,tx_bps) VALUES (?,?,?,?,?,?)')
+    .run('device', device.id, '', now, rxBps, txBps);
+
+  getBroadcast()('traffic', { sourceType: 'device', sourceId: device.id, iface: '', rxBps, txBps, ts: now });
+}
+
+// ── Трафик: MikroTik (роутеры) ────────────────────────────────────────
+// /interface/print stats даёт накопительные rx-byte/tx-byte по интерфейсу —
+// та же логика дельты, что и для SNMP.
+let _routerOsQuery = null;
+function getRouterOsQuery() {
+  if (!_routerOsQuery) { try { _routerOsQuery = require('../routes/integrations').routerOsQuery; } catch { _routerOsQuery = null; } }
+  return _routerOsQuery;
+}
+
+async function pollRouterTraffic(routerCfg) {
+  const ifaces = routerCfg.trafficInterfaces || [];
+  if (!ifaces.length) return;
+  const query = getRouterOsQuery();
+  if (!query) return;
+
+  let stats;
+  try {
+    // RouterOS API возвращает rx-byte/tx-byte в стандартном ответе /interface/print —
+    // в отличие от CLI-таблицы, для API не нужен отдельный флаг "stats".
+    stats = await query(routerCfg, '/interface/print');
+  } catch { return; } // роутер недоступен — тихо пропускаем этот тик
+
+  const now = Date.now();
+  for (const ifaceName of ifaces) {
+    const row = (Array.isArray(stats) ? stats : []).find(s => s.name === ifaceName);
+    if (!row || row['rx-byte'] == null || row['tx-byte'] == null) continue;
+
+    const rxBytes = Number(row['rx-byte']);
+    const txBytes = Number(row['tx-byte']);
+    const key  = 'r:' + routerCfg.id + ':' + ifaceName;
+    const prev = trafficRawCache[key];
+    trafficRawCache[key] = { ts: now, rxBytes, txBytes };
+    if (!prev) continue;
+
+    const elapsedSec = (now - prev.ts) / 1000;
+    if (elapsedSec < 1) continue;
+
+    const deltaRx = rxBytes >= prev.rxBytes ? rxBytes - prev.rxBytes : rxBytes;
+    const deltaTx = txBytes >= prev.txBytes ? txBytes - prev.txBytes : txBytes;
+    const rxBps = Math.round((deltaRx * 8) / elapsedSec);
+    const txBps = Math.round((deltaTx * 8) / elapsedSec);
+
+    db.prepare('INSERT INTO traffic_history (source_type,source_id,iface,ts,rx_bps,tx_bps) VALUES (?,?,?,?,?,?)')
+      .run('router', routerCfg.id, ifaceName, now, rxBps, txBps);
+
+    getBroadcast()('traffic', { sourceType: 'router', sourceId: routerCfg.id, iface: ifaceName, rxBps, txBps, ts: now });
+  }
+}
+
+// ── Отдельный, более редкий тик для трафика (раз в 30 сек) ────────────
+const TRAFFIC_TICK_MS = 30000;
+async function trafficTick() {
+  const features = getFeatures();
+  if (!features.traffic) return;
+
+  const devices = db.prepare('SELECT * FROM devices WHERE monitored=1 AND snmp_enabled=1 AND snmp_if_index IS NOT NULL').all();
+  for (const d of devices) {
+    pollDeviceTraffic(d).catch(err => log.debug({ err, deviceId: d.id }, 'Ошибка опроса трафика (SNMP)'));
+  }
+
+  const routers = getSetting('mikrotiks') || [];
+  for (const r of routers) {
+    if (r.trafficInterfaces?.length) {
+      pollRouterTraffic(r).catch(err => log.debug({ err, routerId: r.id }, 'Ошибка опроса трафика (MikroTik)'));
+    }
+  }
+}
+setInterval(trafficTick, TRAFFIC_TICK_MS);
 
 // ── Алерты ───────────────────────────────────────────────────────────
 async function sendTelegram(cfg, text) {

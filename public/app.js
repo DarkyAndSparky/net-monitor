@@ -66,6 +66,14 @@ document.getElementById('logout-btn').addEventListener('click', async () => {
 async function api(url, opts) {
   const res = await fetch(url, opts);
   if (res.status === 401) { showLogin(); throw new Error('auth'); }
+  if (res.status === 429) {
+    let msg = 'Слишком много запросов, подождите немного';
+    try { const data = await res.clone().json(); if (data.message) msg = data.message; } catch {}
+    const retryAfter = res.headers.get('RateLimit-Reset') || res.headers.get('Retry-After');
+    if (retryAfter) msg += ` (~${Math.ceil(Number(retryAfter))} сек)`;
+    toast(msg, 'warning', 6000);
+    throw new Error('rate_limited');
+  }
   return res;
 }
 
@@ -164,6 +172,25 @@ function connectSSE() {
       const ev = JSON.parse(e.data);
       if (ev.type === 'open') toast(`🔴 Инцидент: ${ev.deviceName} недоступно`, 'error', 6000);
       if (ev.type === 'close') toast(`🟢 Восстановлено: ${ev.deviceName}`, 'success', 4000);
+    } catch {}
+  });
+
+  // traffic — новая точка трафика (дебаунс на клиенте: обновляем таблицу не чаще раза в 3 сек)
+  es.addEventListener('traffic', () => {
+    const now = Date.now();
+    if (now - _lastTrafficReload < 3000) return;
+    _lastTrafficReload = now;
+    if (document.getElementById('tab-traffic')?.classList.contains('active')) loadTraffic();
+  });
+
+  // agent — новый отчёт от агента (обновляем только если открыта детальная
+  // страница именно этого устройства)
+  es.addEventListener('agent', e => {
+    try {
+      const ev = JSON.parse(e.data);
+      if (_ddDeviceId === ev.deviceId && !document.getElementById('device-detail-overlay')?.classList.contains('hidden')) {
+        loadAgentPanel();
+      }
     } catch {}
   });
 
@@ -1130,6 +1157,7 @@ function openAdd() {
   document.getElementById('f-snmp-enabled').checked = false;
   document.getElementById('f-snmp-community').value = 'public';
   document.getElementById('f-snmp-port').value = '161';
+  document.getElementById('f-snmp-ifindex').value = '';
   document.getElementById('f-portchecks').value = '';
   document.getElementById('f-type-custom-wrap').classList.add('hidden');
   toggleIntervalVisibility();
@@ -1159,6 +1187,7 @@ function openEdit(id) {
   document.getElementById('f-snmp-enabled').checked = !!(d.snmp && d.snmp.enabled);
   document.getElementById('f-snmp-community').value = (d.snmp && d.snmp.community) || 'public';
   document.getElementById('f-snmp-port').value = (d.snmp && d.snmp.port) || 161;
+  document.getElementById('f-snmp-ifindex').value = (d.snmp && d.snmp.ifIndex != null) ? d.snmp.ifIndex : '';
   document.getElementById('f-portchecks').value = (d.portChecks || []).map(p => p.port).join(',');
   toggleIntervalVisibility();
   document.getElementById('f-snmp-wrap').classList.toggle('hidden', !FEATURES.snmp);
@@ -1221,7 +1250,8 @@ document.getElementById('device-form').addEventListener('submit', async (e) => {
     snmp: {
       enabled: document.getElementById('f-snmp-enabled').checked,
       community: document.getElementById('f-snmp-community').value || 'public',
-      port: Number(document.getElementById('f-snmp-port').value) || 161
+      port: Number(document.getElementById('f-snmp-port').value) || 161,
+      ifIndex: document.getElementById('f-snmp-ifindex').value !== '' ? Number(document.getElementById('f-snmp-ifindex').value) : null
     },
     portChecks: document.getElementById('f-portchecks').value
       .split(',').map(s => s.trim()).filter(Boolean)
@@ -1560,6 +1590,7 @@ document.getElementById('build-topology-btn').addEventListener('click', async ()
 // ---------------- ФИЧЕ-ФЛАГИ: показ/скрытие зависимого UI ----------------
 function applyFeatureVisibility() {
   document.getElementById('nav-incidents').classList.toggle('hidden', !FEATURES.incidents);
+  document.getElementById('nav-traffic').classList.toggle('hidden', !FEATURES.traffic);
   document.getElementById('escalation-block').classList.toggle('hidden', !FEATURES.incidents);
   document.getElementById('f-snmp-wrap').classList.toggle('hidden', !FEATURES.snmp);
   document.getElementById('f-ports-wrap').classList.toggle('hidden', !FEATURES.portChecks);
@@ -1581,6 +1612,7 @@ async function loadFeaturesForm() {
   document.getElementById('feat-portchecks').checked = !!FEATURES.portChecks;
   document.getElementById('feat-incidents').checked = !!FEATURES.incidents;
   document.getElementById('feat-auditlog').checked = !!FEATURES.auditLog;
+  document.getElementById('feat-traffic').checked = !!FEATURES.traffic;
 }
 
 document.getElementById('features-form').addEventListener('submit', async (e) => {
@@ -1592,7 +1624,8 @@ document.getElementById('features-form').addEventListener('submit', async (e) =>
       snmp: document.getElementById('feat-snmp').checked,
       portChecks: document.getElementById('feat-portchecks').checked,
       incidents: document.getElementById('feat-incidents').checked,
-      auditLog: document.getElementById('feat-auditlog').checked
+      auditLog: document.getElementById('feat-auditlog').checked,
+      traffic: document.getElementById('feat-traffic').checked
     })
   });
   FEATURES = await res.json();
@@ -2064,6 +2097,7 @@ async function editConnection(type, id, rows) {
   if (type === 'mikrotik') {
     const tlsEl = document.getElementById('conn-tls');
     if (tlsEl) tlsEl.checked = !!conn.useTls;
+    set('conn-traffic-ifaces', (conn.trafficInterfaces || []).join(','));
   }
   // Сначала удаляем старое, потом форма создаст новое при сабмите
   if (await showConfirm(
@@ -2108,6 +2142,8 @@ function updateConnFormFields() {
   document.getElementById('conn-site-wrap').classList.toggle('hidden', type !== 'unifi');
   document.getElementById('conn-unifios-wrap').classList.toggle('hidden', type !== 'unifi');
   document.getElementById('conn-tls-wrap').classList.toggle('hidden', type !== 'mikrotik');
+  document.getElementById('conn-traffic-wrap').classList.toggle('hidden', type !== 'mikrotik');
+  document.getElementById('conn-traffic-hint').classList.toggle('hidden', type !== 'mikrotik');
   document.getElementById('conn-hint-mikrotik').classList.toggle('hidden', type !== 'mikrotik');
   document.getElementById('conn-hint-unifi').classList.toggle('hidden', type !== 'unifi');
   document.getElementById('conn-hint-cisco').classList.toggle('hidden', type !== 'cisco');
@@ -2138,7 +2174,10 @@ document.getElementById('connection-form').addEventListener('submit', async (e) 
     user: document.getElementById('conn-user').value,
     password: document.getElementById('conn-password').value
   };
-  if (type === 'mikrotik') payload.useTls = document.getElementById('conn-tls').checked;
+  if (type === 'mikrotik') {
+    payload.useTls = document.getElementById('conn-tls').checked;
+    payload.trafficInterfaces = document.getElementById('conn-traffic-ifaces').value;
+  }
   if (type === 'unifi') {
     payload.site = document.getElementById('conn-site').value || 'default';
     payload.unifiOS = document.getElementById('conn-unifios').checked;
@@ -2838,6 +2877,197 @@ async function loadDeviceDetail() {
     console.error('loadDeviceDetail:', e);
     toast('Ошибка загрузки данных устройства', 'error');
   }
+  loadAgentPanel(); // независимо — не блокируем остальную страницу если агент недоступен
+}
+
+/* ══════════════════════════════════════════════════════════
+   АГЕНТ (CPU/RAM/disk с самой машины)
+══════════════════════════════════════════════════════════ */
+
+let _agentRange = '1h';
+let _agentData  = null;
+
+async function loadAgentPanel() {
+  if (!_ddDeviceId) return;
+  const linked = _ddData?.device?.agentEnabled;
+
+  document.getElementById('dd-agent-not-linked').classList.toggle('hidden', !!linked);
+  document.getElementById('dd-agent-linked').classList.toggle('hidden', !linked);
+
+  if (linked) {
+    const tokenEl = document.getElementById('dd-agent-token-display');
+    if (tokenEl && !tokenEl.dataset.copy) {
+      // Токен не показываем повторно из соображений безопасности —
+      // только маску. Полный токен виден один раз, при генерации.
+      tokenEl.childNodes[0].textContent = '•••• (скрыт, см. при генерации)';
+    }
+  }
+
+  try {
+    _agentData = await api(`/api/devices/${_ddDeviceId}/agent/metrics?range=${_agentRange}`).then(r => r.json());
+  } catch (e) {
+    console.error('loadAgentPanel:', e);
+    return;
+  }
+
+  const card = document.getElementById('dd-agent-metrics-card');
+  if (!_agentData.latest) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = '';
+
+  const L = _agentData.latest;
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+
+  const pctColor = v => v == null ? 'var(--text-dim)' : v >= 90 ? 'var(--red)' : v >= 75 ? 'var(--yellow)' : 'var(--green)';
+  const setPct = (id, val) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = val != null ? val + '%' : '—';
+    el.style.color = pctColor(val);
+  };
+
+  setPct('dd-agent-cpu', L.cpuPct);
+  setPct('dd-agent-ram', L.ramPct);
+  setPct('dd-agent-disk', L.diskPct);
+
+  set('dd-agent-hostname', L.hostname || '—');
+  set('dd-agent-os', L.os || '—');
+  set('dd-agent-uptime', L.uptimeSec != null ? fmtDuration(L.uptimeSec) : '—');
+  set('dd-agent-last-report', 'обновлено ' + fmtRelativeTime(L.ts));
+
+  renderAgentChart(_agentData.history);
+}
+
+async function showAgentToken() {
+  if (!_ddDeviceId) return;
+  const btn = document.getElementById('dd-agent-get-token-btn');
+  const restore = btnLoading(btn);
+  try {
+    const { token } = await api(`/api/devices/${_ddDeviceId}/agent/token`).then(r => r.json());
+    showTokenDialog(token, 'Токен агента сгенерирован');
+    document.getElementById('dd-agent-not-linked').classList.add('hidden');
+    document.getElementById('dd-agent-linked').classList.remove('hidden');
+    const tokenEl = document.getElementById('dd-agent-token-display');
+    tokenEl.dataset.copy = token;
+    tokenEl.childNodes[0].textContent = token.slice(0, 8) + '••••••••';
+  } catch (e) {
+    toast('Ошибка получения токена', 'error');
+  } finally {
+    restore();
+  }
+}
+
+async function resetAgentToken() {
+  if (!_ddDeviceId) return;
+  const ok = await showConfirm('Перевыпустить токен?', 'Старый токен сразу перестанет работать — обновите его в конфигурации агента на машине.', { okLabel: 'Перевыпустить', okClass: 'btn-primary' });
+  if (!ok) return;
+  try {
+    const { token } = await api(`/api/devices/${_ddDeviceId}/agent/reset`, { method: 'POST' }).then(r => r.json());
+    showTokenDialog(token, 'Новый токен сгенерирован');
+    const tokenEl = document.getElementById('dd-agent-token-display');
+    tokenEl.dataset.copy = token;
+    tokenEl.childNodes[0].textContent = token.slice(0, 8) + '••••••••';
+    toast('Токен перевыпущен', 'success');
+  } catch (e) {
+    toast('Ошибка перевыпуска токена', 'error');
+  }
+}
+
+async function unlinkAgent() {
+  if (!_ddDeviceId) return;
+  const ok = await showConfirm('Отвязать агента?', 'Токен будет удалён, агент на машине перестанет иметь доступ. Метрики истории сохранятся.');
+  if (!ok) return;
+  try {
+    await api(`/api/devices/${_ddDeviceId}/agent`, { method: 'DELETE' });
+    document.getElementById('dd-agent-not-linked').classList.remove('hidden');
+    document.getElementById('dd-agent-linked').classList.add('hidden');
+    document.getElementById('dd-agent-token-display').dataset.copy = '';
+    toast('Агент отвязан', 'success');
+  } catch (e) {
+    toast('Ошибка отвязки агента', 'error');
+  }
+}
+
+// Простой модальный показ токена с копированием (токен виден только один раз при генерации)
+function showTokenDialog(token, title) {
+  let modal = document.getElementById('agent-token-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'agent-token-modal';
+    modal.className = 'modal-overlay';
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e => { if (e.target === modal) modal.classList.add('hidden'); });
+  }
+  modal.innerHTML = `
+    <div class="modal" style="width:480px">
+      <h2>${esc(title)}</h2>
+      <p class="hint" style="margin:0 0 12px;">Скопируйте токен сейчас — повторно он не показывается. Используйте его в команде запуска агента (<code>--token</code>).</p>
+      <div class="copyable" data-copy="${esc(token)}" style="background:var(--panel-2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-family:monospace; font-size:12px; word-break:break-all; cursor:pointer;">
+        ${esc(token)} <i class="ti ti-copy copy-icon"></i>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-primary" onclick="document.getElementById('agent-token-modal').classList.add('hidden')">Готово</button>
+      </div>
+    </div>`;
+  modal.classList.remove('hidden');
+}
+
+document.addEventListener('click', e => {
+  const btn = e.target.closest('[data-agent-range]');
+  if (!btn) return;
+  document.querySelectorAll('[data-agent-range]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _agentRange = btn.dataset.agentRange;
+  loadAgentPanel();
+});
+
+function renderAgentChart(history) {
+  const canvas = document.getElementById('dd-agent-chart');
+  if (!canvas) return;
+
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.parentElement.clientWidth - 32;
+  const H = 90;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, W, H);
+
+  if (!history.length) {
+    ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--text-dim').trim() || '#a09e99';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Нет данных за выбранный период', W / 2, H / 2);
+    return;
+  }
+
+  const padTop = 6, padBottom = 6;
+  const plotH = H - padTop - padBottom;
+  const stepX = W / Math.max(1, history.length - 1);
+
+  const drawLine = (key, color) => {
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    let started = false;
+    history.forEach((p, i) => {
+      if (p[key] == null) return;
+      const x = i * stepX;
+      const y = padTop + plotH - (p[key] / 100) * plotH;
+      if (!started) { ctx.moveTo(x, y); started = true; } else { ctx.lineTo(x, y); }
+    });
+    ctx.stroke();
+  };
+
+  const accentColor = getComputedStyle(document.body).getPropertyValue('--accent').trim() || '#60a5fa';
+  const greenColor  = getComputedStyle(document.body).getPropertyValue('--green').trim()  || '#4ade80';
+  const yellowColor = getComputedStyle(document.body).getPropertyValue('--yellow').trim() || '#fbbf24';
+  drawLine('cpu', accentColor);
+  drawLine('ram', greenColor);
+  drawLine('disk', yellowColor);
 }
 
 // Рендер
@@ -3193,3 +3423,167 @@ document.addEventListener('DOMContentLoaded', () => {
   document.body.appendChild(hint);
 });
 
+
+/* ══════════════════════════════════════════════════════════
+   ТРАФИК (SNMP-устройства + MikroTik-интерфейсы)
+══════════════════════════════════════════════════════════ */
+
+let TRAFFIC_DATA = { devices: [], routers: [] };
+let trafficPollTimer = null;
+let _lastTrafficReload = 0;
+
+function fmtBps(bps) {
+  if (bps == null) return '—';
+  if (bps >= 1e9) return (bps / 1e9).toFixed(2) + ' Гбит/с';
+  if (bps >= 1e6) return (bps / 1e6).toFixed(2) + ' Мбит/с';
+  if (bps >= 1e3) return (bps / 1e3).toFixed(1) + ' Кбит/с';
+  return bps + ' бит/с';
+}
+
+async function loadTraffic() {
+  try {
+    TRAFFIC_DATA = await api('/api/traffic/current').then(r => r.json());
+  } catch (e) {
+    console.error('loadTraffic:', e);
+    return;
+  }
+  renderTraffic();
+}
+
+function renderTraffic() {
+  const { devices = [], routers = [] } = TRAFFIC_DATA;
+  const empty = document.getElementById('traffic-empty');
+  const content = document.getElementById('traffic-content');
+  if (!empty || !content) return;
+
+  const hasData = devices.length > 0 || routers.length > 0;
+  empty.classList.toggle('hidden', hasData);
+  content.classList.toggle('hidden', !hasData);
+  if (!hasData) return;
+
+  const devTbody = document.getElementById('traffic-devices-tbody');
+  devTbody.innerHTML = devices.length ? devices.map(d => `
+    <tr>
+      <td>${esc(d.name)}</td>
+      <td class="hint">${esc(d.ip || '—')}</td>
+      <td style="color:var(--accent)">${fmtBps(d.rxBps)}</td>
+      <td style="color:var(--yellow)">${fmtBps(d.txBps)}</td>
+      <td class="hint">${fmtRelativeTime(d.ts)}</td>
+      <td><button class="small-btn" onclick="openTrafficChart('device','${esc(d.id)}','', '${esc(d.name)}')">📈 График</button></td>
+    </tr>`).join('') : '<tr><td colspan="6" class="hint">Нет устройств с настроенным SNMP-трафиком</td></tr>';
+
+  const rtrTbody = document.getElementById('traffic-routers-tbody');
+  rtrTbody.innerHTML = routers.length ? routers.map(r => `
+    <tr>
+      <td>${esc(r.routerName)}</td>
+      <td class="hint">${esc(r.iface)}</td>
+      <td style="color:var(--accent)">${fmtBps(r.rxBps)}</td>
+      <td style="color:var(--yellow)">${fmtBps(r.txBps)}</td>
+      <td class="hint">${fmtRelativeTime(r.ts)}</td>
+      <td><button class="small-btn" onclick="openTrafficChart('router','${esc(r.routerId)}','${esc(r.iface)}', '${esc(r.routerName)} / ${esc(r.iface)}')">📈 График</button></td>
+    </tr>`).join('') : '<tr><td colspan="6" class="hint">Нет роутеров с настроенными интерфейсами трафика</td></tr>';
+}
+
+// ── График трафика (Canvas, аналогично детальной странице устройства) ─
+let _trafficChartSource = null; // { type, id, iface }
+let _trafficChartRange  = '1h';
+
+async function openTrafficChart(sourceType, sourceId, iface, title) {
+  _trafficChartSource = { type: sourceType, id: sourceId, iface };
+  _trafficChartRange = '1h';
+  document.getElementById('traffic-chart-title').textContent = 'График трафика — ' + title;
+  document.querySelectorAll('[data-traffic-range]').forEach(b => b.classList.toggle('active', b.dataset.trafficRange === '1h'));
+  document.getElementById('traffic-chart-modal').classList.remove('hidden');
+  await loadTrafficChart();
+}
+
+async function loadTrafficChart() {
+  if (!_trafficChartSource) return;
+  const { type, id, iface } = _trafficChartSource;
+  const url = type === 'device'
+    ? `/api/traffic/device/${id}?range=${_trafficChartRange}`
+    : `/api/traffic/router/${id}/${encodeURIComponent(iface)}?range=${_trafficChartRange}`;
+  try {
+    const points = await api(url).then(r => r.json());
+    renderTrafficChart(points);
+  } catch (e) {
+    console.error('loadTrafficChart:', e);
+  }
+}
+
+document.addEventListener('click', e => {
+  const btn = e.target.closest('[data-traffic-range]');
+  if (!btn) return;
+  document.querySelectorAll('[data-traffic-range]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _trafficChartRange = btn.dataset.trafficRange;
+  loadTrafficChart();
+});
+
+function renderTrafficChart(points) {
+  const canvas = document.getElementById('traffic-chart-canvas');
+  if (!canvas) return;
+
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.parentElement.clientWidth - 32;
+  const H = 140;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, W, H);
+
+  if (!points.length) {
+    ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--text-dim').trim() || '#a09e99';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Нет данных за выбранный период', W / 2, H / 2);
+    return;
+  }
+
+  const maxVal = Math.max(1, ...points.map(p => Math.max(p.rx, p.tx)));
+  const padTop = 10, padBottom = 20;
+  const plotH = H - padTop - padBottom;
+  const stepX = W / Math.max(1, points.length - 1);
+
+  const drawLine = (key, color) => {
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    points.forEach((p, i) => {
+      const x = i * stepX;
+      const y = padTop + plotH - (p[key] / maxVal) * plotH;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  };
+
+  const accentColor = getComputedStyle(document.body).getPropertyValue('--accent').trim() || '#60a5fa';
+  const yellowColor = getComputedStyle(document.body).getPropertyValue('--yellow').trim() || '#fbbf24';
+  drawLine('rx', accentColor);
+  drawLine('tx', yellowColor);
+
+  // Подпись максимума
+  ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--text-dim').trim() || '#a09e99';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText(fmtBps(maxVal), 4, padTop);
+}
+
+// Автообновление вкладки раз в 30 сек, пока она открыта
+function startTrafficPolling() {
+  if (trafficPollTimer) clearInterval(trafficPollTimer);
+  trafficPollTimer = setInterval(() => {
+    if (document.getElementById('tab-traffic')?.classList.contains('active')) loadTraffic();
+    else { clearInterval(trafficPollTimer); trafficPollTimer = null; }
+  }, 30000);
+}
+
+// Перехватываем переход на вкладку "Трафик"
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.nav-btn');
+  if (btn && btn.dataset.tab === 'traffic') {
+    loadTraffic();
+    startTrafficPolling();
+  }
+});

@@ -119,9 +119,12 @@
     <div class="nav-item" onclick="show('config')"><span class="icon">🔧</span>Настройка</div>
     <div class="nav-item" onclick="show('backup')"><span class="icon">💾</span>Бэкап и восстановление</div>
     <div class="nav-item" onclick="show('roles')"><span class="icon">👥</span>Роли и права доступа</div>
+    <div class="nav-item" onclick="show('rate-limiting')"><span class="icon">🚦</span>Rate Limiting</div>
     <div class="nav-item" onclick="show('integrations')"><span class="icon">🔌</span>Интеграции</div>
     <div class="nav-item" onclick="show('alerts')"><span class="icon">🔔</span>Алерты и уведомления</div>
     <div class="nav-item" onclick="show('maintenance')"><span class="icon">🔧</span>Окна обслуживания</div>
+    <div class="nav-item" onclick="show('traffic-monitoring')"><span class="icon">📶</span>Мониторинг трафика</div>
+    <div class="nav-item" onclick="show('agent')"><span class="icon">🖥</span>Агент (CPU/RAM/disk)</div>
   </div>
 
   <div class="nav-section">
@@ -143,6 +146,8 @@
     <div class="nav-item" onclick="show('api-integrations')"><span class="icon">🔌</span>Integrations</div>
     <div class="nav-item" onclick="show('api-settings')"><span class="icon">⚙️</span>Settings</div>
     <div class="nav-item" onclick="show('api-maintenance')"><span class="icon">🔧</span>Maintenance</div>
+    <div class="nav-item" onclick="show('api-traffic')"><span class="icon">📶</span>Traffic</div>
+    <div class="nav-item" onclick="show('api-agent')"><span class="icon">🖥</span>Agent</div>
   </div>
 </nav>
 
@@ -232,6 +237,8 @@ node server.js</pre>
     <tr><td>COOKIE_SECURE</td><td>auto</td><td><code>true</code> — принудительно secure cookie (для HTTPS за прокси)</td></tr>
     <tr><td>HTTP_REDIRECT_PORT</td><td>80</td><td>Порт для редиректа HTTP→HTTPS. <code>0</code> — отключить</td></tr>
     <tr><td>METRICS_TOKEN</td><td>—</td><td>Bearer-токен для защиты <code>/metrics</code>. Пусто — открытый эндпоинт</td></tr>
+    <tr><td>RATE_LIMIT_DISABLED</td><td>false</td><td><code>true</code> — отключить rate limiting (только для отладки/тестов)</td></tr>
+    <tr><td>LOG_LEVEL</td><td>info</td><td>Уровень логов pino: trace / debug / info / warn / error</td></tr>
   </table>
 </section>
 
@@ -377,6 +384,49 @@ sqlite3 data/netmonitor.db ".backup data/netmonitor-backup.db"</pre>
   <div class="alert info"><strong>Пароль по умолчанию:</strong> <code>admin / admin</code>. Смените немедленно после первого входа через Настройки → Сменить пароль.</div>
 </section>
 
+<!-- RATE LIMITING -->
+<section id="rate-limiting" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / <span>Rate Limiting</span></div></div>
+  <h1>Rate Limiting</h1>
+  <p class="subtitle">Защита всех API-эндпоинтов от перебора и злоупотребления.</p>
+
+  <h2>Как устроено</h2>
+  <p>Помимо собственной IP-блокировки на <code>/api/login</code> (5 неудачных попыток → блокировка на 5 минут), все остальные <code>/api/*</code> маршруты защищены через <code>express-rate-limit</code> с тремя профилями лимитов в зависимости от типа операции.</p>
+
+  <table>
+    <tr><th>Профиль</th><th>Лимит</th><th>Применяется к</th></tr>
+    <tr><td>Чтение (GET)</td><td>300 запросов / мин</td><td>Список устройств, статус, история, аптайм — то, что UI опрашивает регулярно</td></tr>
+    <tr><td>Запись (POST/PUT/DELETE/PATCH)</td><td>60 запросов / мин</td><td>Создание/изменение/удаление устройств, настроек, пользователей</td></tr>
+    <tr><td>Тяжёлые операции</td><td>10 запросов / 5 мин</td><td>Ping-sweep, импорт с MikroTik/UniFi/Cisco, автопостроение топологии</td></tr>
+  </table>
+
+  <div class="alert info"><strong>Исключения:</strong> <code>/api/health</code> и <code>/api/events</code> (SSE-соединение) не лимитируются — health-check должен отвечать всегда, а SSE держит одно долгоживущее соединение, а не поток отдельных запросов.</div>
+
+  <h2>Ответ при превышении лимита</h2>
+  <pre>HTTP 429 Too Many Requests
+Content-Type: application/json
+RateLimit-Limit: 60
+RateLimit-Remaining: 0
+RateLimit-Reset: 42
+
+{
+  "error": "rate_limited",
+  "message": "Слишком много запросов на изменение данных. Подождите минуту."
+}</pre>
+  <p>Фронтенд перехватывает 429-ответы автоматически и показывает toast-уведомление с указанием, сколько секунд осталось до сброса лимита.</p>
+
+  <h2>Настройка</h2>
+  <table>
+    <tr><th>Переменная окружения</th><th>По умолчанию</th><th>Описание</th></tr>
+    <tr><td><code>RATE_LIMIT_DISABLED</code></td><td>false</td><td><code>true</code> — полностью отключает rate limiting. Использовать только при отладке или в закрытом тестовом окружении</td></tr>
+  </table>
+
+  <div class="alert warning"><strong>⚠</strong> Лимиты считаются по IP-адресу отправителя. Если NetMonitor стоит за реверс-прокси (nginx, Traefik) без передачи реального IP через <code>X-Forwarded-For</code>, все запросы могут учитываться как приходящие с одного IP (адреса прокси) — тогда лимиты будут срабатывать быстрее для всех пользователей сразу. Настройте <code>trust proxy</code> в Express соответственно вашей конфигурации прокси.</div>
+
+  <h2>Логирование</h2>
+  <p>Каждое превышение лимита пишется в лог (<code>pino</code>, уровень <code>warn</code>) с IP-адресом, путём и методом запроса — полезно для выявления попыток перебора или неисправного клиента, который зациклился на запросах.</p>
+</section>
+
 <!-- INTEGRATIONS -->
 <section id="integrations" class="section">
   <div class="top-bar"><div class="breadcrumb">Docs / <span>Интеграции</span></div></div>
@@ -483,6 +533,95 @@ curl https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates
     <div class="schema-field"><span class="schema-key">created_by</span><span class="schema-type">TEXT</span><span class="schema-note">Username создавшего пользователя</span></div>
     <div class="schema-field"><span class="schema-key">note</span><span class="schema-type">TEXT</span><span class="schema-note">Произвольное примечание</span></div>
   </div>
+</section>
+
+<!-- TRAFFIC MONITORING -->
+<section id="traffic-monitoring" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / <span>Мониторинг трафика</span></div></div>
+  <h1>Мониторинг трафика</h1>
+  <p class="subtitle">Загрузка канала (rx/tx) по устройствам через SNMP и по интерфейсам MikroTik-роутеров.</p>
+
+  <div class="alert info">Модуль выключен по умолчанию. Включите: Настройки → Функции → «Мониторинг трафика».</div>
+
+  <h2>Два источника данных</h2>
+  <table>
+    <tr><th>Источник</th><th>Как работает</th><th>Настройка</th></tr>
+    <tr><td>SNMP-устройство</td><td>Опрос <code>ifInOctets</code>/<code>ifOutOctets</code> (IF-MIB) по указанному индексу интерфейса, дельта между опросами → bps</td><td>Карточка устройства → SNMP → «Индекс интерфейса (для трафика)»</td></tr>
+    <tr><td>MikroTik-роутер</td><td><code>/interface/print</code> через RouterOS API — счётчики rx-byte/tx-byte по интерфейсу, та же дельта → bps</td><td>Настройки → Интеграции → подключение MikroTik → «Интерфейсы для мониторинга трафика»</td></tr>
+  </table>
+
+  <h2>Как узнать индекс SNMP-интерфейса</h2>
+  <p>SNMP-walk по OID <code>1.3.6.1.2.1.2.2.1.2</code> (ifDescr) вернёт список интерфейсов с их индексами:</p>
+  <pre>snmpwalk -v2c -c public 192.168.1.1 1.3.6.1.2.1.2.2.1.2
+IF-MIB::ifDescr.1 = STRING: ether1
+IF-MIB::ifDescr.2 = STRING: ether2
+IF-MIB::ifDescr.3 = STRING: wlan1</pre>
+  <p>Число после точки (<code>.1</code>, <code>.2</code>, <code>.3</code>) — это и есть индекс интерфейса, который нужно указать в карточке устройства.</p>
+
+  <h2>Опрос и хранение</h2>
+  <table>
+    <tr><th>Параметр</th><th>Значение</th></tr>
+    <tr><td>Интервал опроса</td><td>30 секунд (отдельный от ping-планировщика тик)</td></tr>
+    <tr><td>Первая точка</td><td>Не сохраняется — нужна как база для расчёта дельты на следующем опросе</td></tr>
+    <tr><td>Защита от переполнения счётчика</td><td>Если новое значение меньше предыдущего (32-битный wrap ~4.3ГБ) — используется как абсолютная дельта</td></tr>
+    <tr><td>Хранение</td><td>Сырые точки 7 дней → агрегация в 10-минутные средние → удаление старше 30 дней</td></tr>
+  </table>
+
+  <div class="alert warning"><strong>⚠</strong> Это не замена Prometheus/Grafana для долгосрочных трендов трафика — встроенное хранилище рассчитано на недели, не на месяцы. Для долгой истории используйте <code>/metrics</code> endpoint с внешним time-series хранилищем.</div>
+
+  <h2>Просмотр</h2>
+  <p>Вкладка <strong>Трафик</strong> в основной навигации (появляется после включения модуля) — таблица текущих значений rx/tx по всем настроенным источникам, обновляется каждые 30 секунд через SSE. Клик на «📈 График» открывает график за 1ч/24ч/7д.</p>
+</section>
+
+<!-- AGENT -->
+<section id="agent" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / <span>Агент (CPU/RAM/disk)</span></div></div>
+  <h1>Агент</h1>
+  <p class="subtitle">Лёгкий скрипт на самой машине шлёт метрики CPU/RAM/disk на NetMonitor. Ping видит только «жив/мёртв» — агент даёт заглянуть внутрь.</p>
+
+  <h2>Как работает</h2>
+  <p>Python-скрипт (только stdlib, без сторонних пакетов) собирает метрики раз в минуту и отправляет их POST-запросом с токеном устройства в заголовке <code>Authorization: Bearer &lt;токен&gt;</code>. Токен привязан к одному конкретному устройству — не даёт доступа к остальному API.</p>
+
+  <h2>Установка</h2>
+  <ol style="color:var(--text-dim); font-size:13px; line-height:1.8;">
+    <li>Карточка устройства → детальная страница → карточка «Агент» → «Показать / сгенерировать токен» — скопируйте его (показывается один раз)</li>
+    <li>Скачайте папку <code>agent/</code> из репозитория на целевую машину</li>
+    <li>Запустите установочный скрипт под свою ОС (ниже)</li>
+  </ol>
+
+  <h3>Linux (systemd)</h3>
+  <pre>sudo bash install-linux.sh --server https://netmonitor.local:9221 --token &lt;ТОКЕН&gt;</pre>
+
+  <h3>Windows (Планировщик заданий)</h3>
+  <pre>install-windows.bat https://netmonitor.local:9221 &lt;ТОКЕН&gt;</pre>
+
+  <h3>Вручную / проверка (любая ОС)</h3>
+  <pre>python3 netmonitor-agent.py --server https://netmonitor.local:9221 --token &lt;ТОКЕН&gt; --once</pre>
+  <p>Флаг <code>--once</code> отправляет один отчёт и завершается — удобно для проверки перед установкой службы.</p>
+
+  <div class="alert warning"><strong>⚠ Самоподписанный сертификат:</strong> если NetMonitor использует автосгенерированный TLS-сертификат, добавьте <code>--insecure</code> к команде запуска — иначе агент откажется подключаться.</div>
+
+  <h2>Собираемые метрики</h2>
+  <table>
+    <tr><th>Метрика</th><th>Как считается</th></tr>
+    <tr><td>CPU %</td><td>Linux/Windows — точное чтение системных счётчиков (<code>/proc/stat</code>, <code>GetSystemTimes</code>). macOS — приближение через loadavg</td></tr>
+    <tr><td>RAM % / used / total</td><td><code>/proc/meminfo</code> (Linux), <code>GlobalMemoryStatusEx</code> (Windows), <code>vm_stat</code> (macOS)</td></tr>
+    <tr><td>Disk % / used / total</td><td><code>shutil.disk_usage()</code> — путь настраивается через <code>--disk-path</code> (по умолчанию <code>/</code> или <code>C:\</code>)</td></tr>
+    <tr><td>Uptime</td><td>Время работы машины с последней загрузки</td></tr>
+    <tr><td>Hostname / OS</td><td>Информационно, для идентификации в случае нескольких агентов</td></tr>
+  </table>
+
+  <h2>Безопасность токена</h2>
+  <ul style="color:var(--text-dim); font-size:13px; line-height:1.8;">
+    <li>Токен даёт право писать метрики только для одного устройства — не полный доступ к API</li>
+    <li>Показывается один раз при генерации — при повторном открытии карточки виден только префикс (<code>a1b2c3d4••••••••</code>)</li>
+    <li>«Перевыпустить» — старый токен мгновенно становится недействителен, нужно обновить конфиг агента на машине</li>
+    <li>«Отвязать» — удаляет токен полностью, история метрик сохраняется</li>
+    <li>Лимит частоты отправки — 20 запросов/мин на токен (см. раздел Rate Limiting)</li>
+  </ul>
+
+  <h2>Хранение и очистка</h2>
+  <p>Метрики хранятся без downsampling (снимаются уже редко — раз в минуту). Автоочистка раз в час удаляет записи старше 30 дней.</p>
 </section>
 
 <!-- ARCH -->
@@ -1268,6 +1407,138 @@ app.use('/api', require('./src/routes/myroute'));</pre>
       <p>Удаление активного окна немедленно возобновляет алерты для устройств в нём.</p>
       <h4>Response 200</h4><pre>{ "ok": true }</pre>
       <div class="alert info"><strong>Автоочистка:</strong> завершённые окна старше 7 дней удаляются автоматически раз в 6 часов.</div>
+    </div>
+  </div>
+</section>
+
+<!-- API TRAFFIC -->
+<section id="api-traffic" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / API / <span>Traffic</span></div></div>
+  <h1>API — Traffic</h1>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)">
+      <span class="method GET">GET</span><span class="endpoint-path">/api/traffic/current</span>
+      <span class="endpoint-desc">Текущие значения по всем источникам</span><span class="auth-badge">auth</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Возвращает последнюю известную точку по каждому SNMP-устройству и каждому интерфейсу MikroTik с настроенным трафиком. Если модуль выключен — <code>enabled: false</code>, массивы пустые.</p>
+      <h4>Response 200</h4>
+      <pre>{
+  "enabled": true,
+  "devices": [
+    { "id": "d-uuid", "name": "office-switch", "ip": "192.168.1.2", "rxBps": 1250000, "txBps": 340000, "ts": 1723200000000 }
+  ],
+  "routers": [
+    { "routerId": "r-uuid", "routerName": "Офис — ядро", "iface": "ether1", "rxBps": 8400000, "txBps": 2100000, "ts": 1723200000000 }
+  ]
+}</pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)">
+      <span class="method GET">GET</span><span class="endpoint-path">/api/traffic/device/:id?range=1h|24h|7d</span>
+      <span class="endpoint-desc">История трафика SNMP-устройства</span><span class="auth-badge">auth</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Параметр <code>range</code> по умолчанию <code>24h</code>. Ответ уже приведён к ≤200 точкам (downsampling на сервере) — готов для прямого построения графика.</p>
+      <h4>Response 200</h4>
+      <pre>[{ "t": 1723200000000, "rx": 1250000, "tx": 340000 }, ...]</pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)">
+      <span class="method GET">GET</span><span class="endpoint-path">/api/traffic/router/:routerId/:iface?range=1h|24h|7d</span>
+      <span class="endpoint-desc">История трафика интерфейса MikroTik-роутера</span><span class="auth-badge">auth</span>
+    </div>
+    <div class="endpoint-body">
+      <p><code>:iface</code> — точное имя интерфейса как в RouterOS (например <code>ether1</code>), URL-encoded при необходимости.</p>
+      <h4>Response 200</h4>
+      <pre>[{ "t": 1723200000000, "rx": 8400000, "tx": 2100000 }, ...]</pre>
+    </div>
+  </div>
+
+  <div class="alert info">Значения <code>rx</code>/<code>tx</code> — биты в секунду (bps), не байты. Единицы выбираются автоматически на фронтенде (Кбит/с, Мбит/с, Гбит/с).</div>
+</section>
+
+<!-- API AGENT -->
+<section id="api-agent" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / API / <span>Agent</span></div></div>
+  <h1>API — Agent</h1>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)">
+      <span class="method POST">POST</span><span class="endpoint-path">/api/agent/report</span>
+      <span class="endpoint-desc">Приём метрик от агента</span><span class="auth-badge">token</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Авторизация не через сессию — через заголовок <code>Authorization: Bearer &lt;токен_устройства&gt;</code>. Публичный эндпоинт (без cookie), но требует валидный токен.</p>
+      <h4>Body</h4>
+      <pre>{
+  "cpu_pct": 12.3, "ram_pct": 45.1, "ram_used_mb": 3840, "ram_total_mb": 8192,
+  "disk_pct": 67.8, "disk_used_gb": 135.6, "disk_total_gb": 200.0,
+  "uptime_sec": 432000, "hostname": "server-01", "os": "Linux 6.8.0"
+}</pre>
+      <p>Все поля опциональны — сервер сохранит что есть, отсутствующие останутся <code>null</code>.</p>
+      <h4>Response 200</h4><pre>{ "ok": true }</pre>
+      <h4>Response 401</h4><pre>{ "error": "invalid_token" }</pre>
+      <h4>Response 429</h4><pre>{ "error": "rate_limited", "message": "Слишком много отчётов от агента..." }</pre>
+      <div class="alert info">Лимит — 20 запросов/мин <strong>на токен</strong> (не на IP) — несколько агентов за одним NAT не мешают друг другу.</div>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)">
+      <span class="method GET">GET</span><span class="endpoint-path">/api/devices/:id/agent/token</span>
+      <span class="endpoint-desc">Показать/сгенерировать токен устройства</span><span class="op-badge">operator</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Если токен ещё не сгенерирован — создаёт новый. Если уже есть — возвращает существующий (не перевыпускает).</p>
+      <h4>Response 200</h4><pre>{ "token": "a1b2c3d4e5f6..." }</pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)">
+      <span class="method POST">POST</span><span class="endpoint-path">/api/devices/:id/agent/reset</span>
+      <span class="endpoint-desc">Перевыпустить токен</span><span class="op-badge">operator</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Старый токен немедленно становится недействителен. Нужно обновить конфигурацию агента на машине новым токеном.</p>
+      <h4>Response 200</h4><pre>{ "token": "новый-токен..." }</pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)">
+      <span class="method DELETE">DELETE</span><span class="endpoint-path">/api/devices/:id/agent</span>
+      <span class="endpoint-desc">Отвязать агента (удалить токен)</span><span class="op-badge">operator</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Удаляет токен — агент на машине теряет доступ. История метрик в БД сохраняется.</p>
+      <h4>Response 200</h4><pre>{ "ok": true }</pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)">
+      <span class="method GET">GET</span><span class="endpoint-path">/api/devices/:id/agent/metrics?range=1h|24h|7d</span>
+      <span class="endpoint-desc">Последний снапшот + история метрик</span><span class="auth-badge">auth</span>
+    </div>
+    <div class="endpoint-body">
+      <h4>Response 200</h4>
+      <pre>{
+  "linked": true,
+  "latest": {
+    "ts": 1723200000000, "cpuPct": 12.3, "ramPct": 45.1,
+    "ramUsedMb": 3840, "ramTotalMb": 8192,
+    "diskPct": 67.8, "diskUsedGb": 135.6, "diskTotalGb": 200.0,
+    "uptimeSec": 432000, "hostname": "server-01", "os": "Linux 6.8.0"
+  },
+  "history": [{ "t": 1723200000000, "cpu": 12.3, "ram": 45.1, "disk": 67.8 }, ...]
+}</pre>
     </div>
   </div>
 </section>

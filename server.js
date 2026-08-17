@@ -169,6 +169,28 @@ app.get('/api/license', (req, res) => {
   }
 });
 
+// ── Rate limiting ────────────────────────────────────────────────────
+// /api/login имеет собственную IP-блокировку (см. routes/auth.js).
+// Здесь — общая защита остальных /api/* маршрутов от перебора/злоупотребления.
+const { apiReadLimiter, apiWriteLimiter, scanLimiter, agentLimiter } = require('./src/middleware/rate-limit');
+
+app.use('/api/agent/report', agentLimiter); // свой лимит по токену устройства, до общего write-лимитера
+
+app.use('/api', (req, res, next) => {
+  if (req.path === '/login' || req.path === '/agent/report') return next(); // у логина и агента свои лимитеры
+  if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) return apiWriteLimiter(req, res, next);
+  return apiReadLimiter(req, res, next);
+});
+
+// Тяжёлые операции — отдельный, более строгий лимит поверх общего
+app.use('/api/discovery/scan',                     scanLimiter);
+app.use('/api/mikrotik/routers/:id/import',         scanLimiter);
+app.use('/api/mikrotik/import-all',                 scanLimiter);
+app.use('/api/unifi/controllers/:id/import',        scanLimiter);
+app.use('/api/cisco/devices/:id/import',            scanLimiter);
+app.use('/api/topology/build/:routerId',            scanLimiter);
+app.use('/api/discovery/topology/build/:routerId',  scanLimiter);
+
 // ── Роуты ─────────────────────────────────────────────────────────────
 app.use('/api',              require('./src/routes/auth'));
 app.use('/api',              require('./src/routes/settings'));
@@ -180,6 +202,8 @@ app.use(                     require('./src/routes/metrics'));
 app.use('/api',              require('./src/routes/sse'));
 app.use('/api/maintenance',  require('./src/routes/maintenance'));
 app.use('/api/device',       require('./src/routes/device-detail'));
+app.use('/api/traffic',      require('./src/routes/traffic'));
+app.use('/api',              require('./src/routes/agent'));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── Определяем локальный IP ───────────────────────────────────────────

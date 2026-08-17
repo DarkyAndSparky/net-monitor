@@ -66,6 +66,8 @@ db.exec(`
     snmp_enabled   INTEGER NOT NULL DEFAULT 0,
     snmp_community TEXT NOT NULL DEFAULT 'public',
     snmp_port      INTEGER NOT NULL DEFAULT 161,
+    snmp_if_index  INTEGER,               -- индекс интерфейса для мониторинга трафика (ifOctets), NULL = не задан
+    agent_token    TEXT,                  -- токен доступа для агента (метрики CPU/RAM/disk), NULL = агент не привязан
     port_checks    TEXT NOT NULL DEFAULT '[]',
     x              REAL NOT NULL DEFAULT 300,
     y              REAL NOT NULL DEFAULT 300,
@@ -137,6 +139,34 @@ db.exec(`
     note        TEXT NOT NULL DEFAULT ''
   );
   CREATE INDEX IF NOT EXISTS idx_mw_end ON maintenance_windows(end_ts);
+
+  CREATE TABLE IF NOT EXISTS traffic_history (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_type TEXT NOT NULL,   -- 'device' (SNMP ifOctets) | 'router' (MikroTik interface)
+    source_id  TEXT NOT NULL,    -- device.id либо mikrotik router.id
+    iface      TEXT NOT NULL DEFAULT '',  -- имя/индекс интерфейса (для router — имя, для device — обычно пусто)
+    ts         INTEGER NOT NULL,
+    rx_bps     REAL NOT NULL DEFAULT 0,
+    tx_bps     REAL NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_traffic_source_ts ON traffic_history(source_type, source_id, iface, ts);
+
+  CREATE TABLE IF NOT EXISTS agent_metrics (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    device_id   TEXT NOT NULL,
+    ts          INTEGER NOT NULL,
+    cpu_pct     REAL,
+    ram_pct     REAL,
+    ram_used_mb INTEGER,
+    ram_total_mb INTEGER,
+    disk_pct    REAL,
+    disk_used_gb REAL,
+    disk_total_gb REAL,
+    uptime_sec  INTEGER,
+    hostname    TEXT,
+    os          TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_agent_metrics_dev_ts ON agent_metrics(device_id, ts);
 `);
 
 // ── Дефолтные категории ───────────────────────────────────────────────
@@ -170,7 +200,7 @@ const DEF_SETTINGS = {
     webhook:  { enabled: false, url: '' },
     escalation: { enabled: false, afterMinutes: 60, telegramChatId: '' }
   },
-  features: { snmp: false, portChecks: false, incidents: false, auditLog: false },
+  features: { snmp: false, portChecks: false, incidents: false, auditLog: false, traffic: false },
   branding: { appName: 'NetMonitor', accentColor: '#3b82f6', defaultTheme: 'dark' },
 };
 Object.entries(DEF_SETTINGS).forEach(([k, v]) => { if (getSetting(k) === null) setSetting(k, v); });
@@ -215,8 +245,9 @@ function deviceRow(r) {
     comment: r.comment, key: !!r.is_key, monitored: !!r.monitored,
     checkInterval: r.check_interval, alertsEnabled: !!r.alerts_enabled,
     source: r.source,
-    snmp: { enabled: !!r.snmp_enabled, community: r.snmp_community, port: r.snmp_port },
+    snmp: { enabled: !!r.snmp_enabled, community: r.snmp_community, port: r.snmp_port, ifIndex: r.snmp_if_index ?? null },
     portChecks: JSON.parse(r.port_checks || '[]'),
+    agentEnabled: !!r.agent_token,
     x: r.x, y: r.y,
   };
 }
@@ -253,5 +284,54 @@ function compressHistory() {
   });
 }
 setInterval(compressHistory, 60 * 60 * 1000);
+
+// ── Сжатие/очистка истории трафика ──────────────────────────────────
+// Трафик снимается реже пинга (раз в 30-60 сек), но данные всё равно накапливаются.
+// Правило: сырые точки старше 7 дней агрегируются в 10-минутные средние (rx/tx bps),
+// точки старше 30 дней — удаляются полностью (для длинных трендов лучше Prometheus/Grafana).
+function compressTraffic() {
+  const now  = Date.now();
+  const cut7d  = now - 7  * 86400 * 1000;
+  const cut30d = now - 30 * 86400 * 1000;
+  const INTERVAL = 10 * 60 * 1000; // 10 минут
+
+  db.prepare('DELETE FROM traffic_history WHERE ts < ?').run(cut30d);
+
+  const keys = db.prepare('SELECT DISTINCT source_type, source_id, iface FROM traffic_history').all();
+  keys.forEach(({ source_type, source_id, iface }) => {
+    db.transaction(() => {
+      const pts = db.prepare(
+        'SELECT id, ts, rx_bps, tx_bps FROM traffic_history WHERE source_type=? AND source_id=? AND iface=? AND ts<? ORDER BY ts'
+      ).all(source_type, source_id, iface, cut7d);
+      if (pts.length < 2) return;
+
+      const buckets = {};
+      pts.forEach(p => {
+        const b = Math.floor(p.ts / INTERVAL) * INTERVAL;
+        if (!buckets[b]) buckets[b] = { rxSum: 0, txSum: 0, count: 0, ids: [] };
+        buckets[b].rxSum += p.rx_bps; buckets[b].txSum += p.tx_bps;
+        buckets[b].count++; buckets[b].ids.push(p.id);
+      });
+
+      const del = db.prepare('DELETE FROM traffic_history WHERE id=?');
+      const ins = db.prepare('INSERT INTO traffic_history (source_type,source_id,iface,ts,rx_bps,tx_bps) VALUES (?,?,?,?,?,?)');
+      Object.entries(buckets).forEach(([bucket, b]) => {
+        if (b.count < 2) return;
+        b.ids.forEach(id => del.run(id));
+        ins.run(source_type, source_id, iface, Number(bucket), b.rxSum / b.count, b.txSum / b.count);
+      });
+    })();
+  });
+}
+setInterval(compressTraffic, 60 * 60 * 1000);
+
+// ── Очистка метрик агента ───────────────────────────────────────────
+// Метрики агента снимаются раз в минуту (частота задаётся на стороне агента,
+// не сервером). Без downsampling — просто удаляем старше 30 дней раз в час.
+function cleanupAgentMetrics() {
+  const cutoff = Date.now() - 30 * 86400 * 1000;
+  db.prepare('DELETE FROM agent_metrics WHERE ts < ?').run(cutoff);
+}
+setInterval(cleanupAgentMetrics, 60 * 60 * 1000);
 
 module.exports = { db, newId, slugify, csvCell, deviceRow, getSetting, setSetting, getFeatures, hashPassword, verifyPassword };

@@ -57,13 +57,14 @@ router.get('/', requireAuth, (req, res) =>
 router.post('/', requireOperator, (req, res) => {
   const b = req.body || {};
   const id = newId('d');
-  db.prepare(`INSERT INTO devices (id,name,ip,mac,location,type,category_id,comment,is_key,monitored,check_interval,alerts_enabled,source,snmp_enabled,snmp_community,snmp_port,port_checks,x,y)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+  db.prepare(`INSERT INTO devices (id,name,ip,mac,location,type,category_id,comment,is_key,monitored,check_interval,alerts_enabled,source,snmp_enabled,snmp_community,snmp_port,snmp_if_index,port_checks,x,y)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
     id, b.name||'Без имени', b.ip||'', b.mac||'', b.location||'', b.type||'', b.category||'other',
     b.comment||'', b.key?1:0, b.monitored!==false?1:0,
     Math.max(MIN_INTERVAL, Number(b.checkInterval)||DEFAULT_INTERVAL),
     b.alertsEnabled!==false?1:0, b.source||'manual',
     b.snmp?.enabled?1:0, b.snmp?.community||'public', Number(b.snmp?.port)||161,
+    b.snmp?.ifIndex!=null && b.snmp.ifIndex!=='' ? Number(b.snmp.ifIndex) : null,
     JSON.stringify(Array.isArray(b.portChecks)?b.portChecks:[]),
     b.x??100+Math.random()*800, b.y??100+Math.random()*500
   );
@@ -76,7 +77,7 @@ router.put('/:id', requireOperator, (req, res) => {
   if (!row) return res.status(404).json({ error: 'not_found' });
   const b = req.body || {};
   const posOnly = Object.keys(b).every(k => ['x','y'].includes(k));
-  db.prepare(`UPDATE devices SET name=?,ip=?,mac=?,location=?,type=?,category_id=?,comment=?,is_key=?,monitored=?,check_interval=?,alerts_enabled=?,snmp_enabled=?,snmp_community=?,snmp_port=?,port_checks=?,x=?,y=?,updated_at=? WHERE id=?`).run(
+  db.prepare(`UPDATE devices SET name=?,ip=?,mac=?,location=?,type=?,category_id=?,comment=?,is_key=?,monitored=?,check_interval=?,alerts_enabled=?,snmp_enabled=?,snmp_community=?,snmp_port=?,snmp_if_index=?,port_checks=?,x=?,y=?,updated_at=? WHERE id=?`).run(
     b.name??row.name, b.ip??row.ip, b.mac??row.mac, b.location??row.location, b.type??row.type,
     b.category??row.category_id, b.comment??row.comment,
     b.key!==undefined?(b.key?1:0):row.is_key,
@@ -86,6 +87,7 @@ router.put('/:id', requireOperator, (req, res) => {
     b.snmp?.enabled!==undefined?(b.snmp.enabled?1:0):row.snmp_enabled,
     b.snmp?.community??row.snmp_community,
     b.snmp?.port!=null?Number(b.snmp.port):row.snmp_port,
+    b.snmp?.ifIndex!==undefined ? (b.snmp.ifIndex===''||b.snmp.ifIndex===null ? null : Number(b.snmp.ifIndex)) : row.snmp_if_index,
     b.portChecks!==undefined?JSON.stringify(b.portChecks):row.port_checks,
     b.x!=null?Number(b.x):row.x, b.y!=null?Number(b.y):row.y,
     Date.now(), req.params.id

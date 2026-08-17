@@ -11,9 +11,10 @@
   },
   "dependencies": {
     "express": "^4.19.2",
+    "express-rate-limit": "^7.4.0",
     "express-session": "^1.18.0",
-    "node-routeros": "^1.6.9",
     "net-snmp": "^3.0.0",
+    "node-routeros": "^1.6.9",
     "pino": "^9.3.2",
     "pino-pretty": "^11.2.2",
     "pino-roll": "^1.0.0",
