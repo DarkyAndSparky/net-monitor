@@ -169,6 +169,23 @@ app.get('/api/license', (req, res) => {
   }
 });
 
+// ── Принудительная смена пароля ────────────────────────────────────────
+// Дефолтный админ (и любой новый пользователь) создаётся с флагом
+// must_change_password. Пока он не сменит пароль — весь остальной API
+// закрыт (и на бэкенде, не только на UI), кроме списка разрешённых путей.
+const { getLiveUser } = require('./src/middleware/auth');
+const PASSWORD_CHANGE_ALLOWED_PATHS = new Set(['/me', '/logout', '/change-password']);
+
+app.use('/api', (req, res, next) => {
+  if (!req.session?.userId) return next(); // не залогинен — обычные requireAuth в роутах вернут 401
+  if (PASSWORD_CHANGE_ALLOWED_PATHS.has(req.path)) return next();
+  const user = getLiveUser(req.session.userId);
+  if (user?.must_change_password) {
+    return res.status(403).json({ error: 'password_change_required', message: 'Смените пароль перед продолжением работы' });
+  }
+  next();
+});
+
 // ── Rate limiting ────────────────────────────────────────────────────
 // /api/login имеет собственную IP-блокировку (см. routes/auth.js).
 // Здесь — общая защита остальных /api/* маршрутов от перебора/злоупотребления.

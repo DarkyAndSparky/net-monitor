@@ -14,6 +14,7 @@ async function checkAuth() {
   const res = await fetch('/api/me');
   if (res.ok) {
     const me = await res.json();
+    if (me.mustChangePassword) { showForcedPasswordChange(me.username); return; }
     showApp(me.username, me.role);
   } else {
     showLogin();
@@ -49,6 +50,7 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
   });
   if (res.ok) {
     const data = await res.json();
+    if (data.mustChangePassword) { showForcedPasswordChange(data.username); return; }
     showApp(data.username, data.role);
   } else {
     const data = await res.json().catch(() => ({}));
@@ -62,10 +64,88 @@ document.getElementById('logout-btn').addEventListener('click', async () => {
   showLogin();
 });
 
+/* ══════════════════════════════════════════════════════════
+   ПРИНУДИТЕЛЬНАЯ СМЕНА ПАРОЛЯ (первый вход / новый пользователь)
+══════════════════════════════════════════════════════════ */
+
+function showForcedPasswordChange(username) {
+  document.getElementById('login-overlay').classList.add('hidden');
+  document.getElementById('app-root').classList.add('hidden');
+  document.getElementById('forced-pwchange-overlay').classList.remove('hidden');
+  document.getElementById('fpw-current').value = '';
+  document.getElementById('fpw-new').value = '';
+  document.getElementById('fpw-confirm').value = '';
+  document.getElementById('forced-pwchange-error').classList.add('hidden');
+  setTimeout(() => document.getElementById('fpw-current').focus(), 50);
+  _forcedPwUsername = username;
+}
+
+let _forcedPwUsername = null;
+
+document.getElementById('forced-pwchange-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errBox = document.getElementById('forced-pwchange-error');
+  errBox.classList.add('hidden');
+
+  const currentPassword = document.getElementById('fpw-current').value;
+  const newPassword = document.getElementById('fpw-new').value;
+  const confirm = document.getElementById('fpw-confirm').value;
+
+  if (newPassword !== confirm) {
+    errBox.textContent = 'Пароли не совпадают';
+    errBox.classList.remove('hidden');
+    return;
+  }
+  if (newPassword.length < 8) {
+    errBox.textContent = 'Пароль должен быть не короче 8 символов';
+    errBox.classList.remove('hidden');
+    return;
+  }
+  if (newPassword === currentPassword) {
+    errBox.textContent = 'Новый пароль должен отличаться от текущего';
+    errBox.classList.remove('hidden');
+    return;
+  }
+
+  const btn = e.target.querySelector('button[type="submit"]');
+  const restore = btnLoading(btn);
+  try {
+    const res = await fetch('/api/change-password', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      errBox.textContent = data.message || (data.error === 'wrong_current_password' ? 'Неверный текущий пароль' : 'Ошибка смены пароля');
+      errBox.classList.remove('hidden');
+      return;
+    }
+    document.getElementById('forced-pwchange-overlay').classList.add('hidden');
+    toast('Пароль изменён', 'success');
+    // Роль на этот момент нам неизвестна из этого ответа — берём через /api/me
+    const me = await fetch('/api/me').then(r => r.json());
+    showApp(me.username, me.role);
+  } catch (err) {
+    errBox.textContent = 'Ошибка соединения с сервером';
+    errBox.classList.remove('hidden');
+  } finally {
+    restore();
+  }
+});
+
 // Обёртка над fetch: если сессия истекла — показываем экран логина
 async function api(url, opts) {
   const res = await fetch(url, opts);
   if (res.status === 401) { showLogin(); throw new Error('auth'); }
+  if (res.status === 403) {
+    let data = {};
+    try { data = await res.clone().json(); } catch {}
+    if (data.error === 'password_change_required') {
+      const me = await fetch('/api/me').then(r => r.json()).catch(() => ({}));
+      showForcedPasswordChange(me.username || '');
+      throw new Error('password_change_required');
+    }
+  }
   if (res.status === 429) {
     let msg = 'Слишком много запросов, подождите немного';
     try { const data = await res.clone().json(); if (data.message) msg = data.message; } catch {}
@@ -2324,7 +2404,9 @@ async function loadUsers() {
     const meRes = await api('/api/me').then(r => r.json());
     document.getElementById('users-tbody').innerHTML = users.map(u => `
       <tr>
-        <td>${esc(u.username)}${u.username === meRes.username ? ' <span class="hint">(вы)</span>' : ''}</td>
+        <td>${esc(u.username)}${u.username === meRes.username ? ' <span class="hint">(вы)</span>' : ''}
+          ${u.mustChangePassword ? '<span class="status-badge status-offline" style="margin-left:6px;" title="Ещё не сменил пароль по умолчанию">пароль не сменён</span>' : ''}
+        </td>
         <td>
           <select class="role-select" data-username="${esc(u.username)}" ${u.username === meRes.username ? 'disabled' : ''}>
             <option value="viewer" ${u.role === 'viewer' ? 'selected' : ''}>Только просмотр</option>
@@ -2340,7 +2422,13 @@ async function loadUsers() {
         const res = await api(`/api/users/${sel.dataset.username}/role`, {
           method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role: sel.value })
         });
-        if (!res.ok) { const d = await res.json(); alert('Ошибка: ' + (d.message || d.error)); await loadUsers(); }
+        if (!res.ok) {
+          const d = await res.json();
+          toast(d.message || d.error, 'error');
+          await loadUsers();
+        } else {
+          toast('Роль обновлена', 'success');
+        }
       });
     });
   } catch (e) { /* ignore */ }
@@ -2365,9 +2453,15 @@ document.getElementById('user-form').addEventListener('submit', async (e) => {
 });
 
 async function deleteUser(username) {
-  if (!confirm(`Удалить пользователя «${username}»?`)) return;
+  const ok = await showConfirm(`Удалить пользователя «${username}»?`, 'Это действие необратимо.');
+  if (!ok) return;
   const res = await api(`/api/users/${username}`, { method: 'DELETE' });
-  if (!res.ok) { const d = await res.json(); alert('Ошибка: ' + (d.message || d.error)); }
+  if (!res.ok) {
+    const d = await res.json();
+    toast(d.message || d.error, 'error');
+  } else {
+    toast(`Пользователь «${username}» удалён`, 'success');
+  }
   await loadUsers();
 }
 

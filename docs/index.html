@@ -221,7 +221,7 @@ node server.js</pre>
   <table>
     <tr><th>Что</th><th>Где</th><th>Примечание</th></tr>
     <tr><td>БД</td><td><code>data/netmonitor.db</code></td><td>SQLite WAL, схема + дефолтные категории</td></tr>
-    <tr><td>Пользователь</td><td>admin / admin</td><td>⚠ Смените пароль после первого входа</td></tr>
+    <tr><td>Пользователь</td><td>admin / admin0000</td><td>Смена пароля <strong>обязательна</strong> при первом входе — сервер не пустит дальше без неё</td></tr>
     <tr><td>Секрет сессии</td><td><code>data/.session-secret</code></td><td>Генерируется один раз, не трогать</td></tr>
     <tr><td>TLS-сертификат</td><td><code>data/certs/</code></td><td>Самоподписанный, генерируется <code>make-cert.bat/.sh</code></td></tr>
   </table>
@@ -381,7 +381,7 @@ sqlite3 data/netmonitor.db ".backup data/netmonitor-backup.db"</pre>
 
   <h2>Управление пользователями</h2>
   <p>Настройки → Пользователи. Создание, смена роли, удаление. Нельзя удалить последнего администратора и нельзя удалить самого себя.</p>
-  <div class="alert info"><strong>Пароль по умолчанию:</strong> <code>admin / admin</code>. Смените немедленно после первого входа через Настройки → Сменить пароль.</div>
+  <div class="alert success"><strong>Пароль по умолчанию:</strong> <code>admin / admin0000</code>. Смена пароля <strong>принудительна</strong> — сразу после первого входа система покажет экран смены пароля и заблокирует весь остальной интерфейс до его прохождения (защита от «забыл сменить»). Это же правило действует для любого нового пользователя, созданного администратором.</div>
 </section>
 
 <!-- RATE LIMITING -->

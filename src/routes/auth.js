@@ -32,30 +32,36 @@ router.post('/login', (req, res) => {
   delete loginAttempts[ip];
   req.session.userId = user.username;
   req.session.role   = user.role || 'admin';
-  res.json({ ok: true, username: user.username, role: user.role });
+  res.json({ ok: true, username: user.username, role: user.role, mustChangePassword: !!user.must_change_password });
 });
 
 router.post('/logout', (req, res) => req.session.destroy(() => res.json({ ok: true })));
 
 router.get('/me', (req, res) => {
-  if (req.session?.userId) return res.json({ username: req.session.userId, role: req.session.role || 'admin' });
-  res.status(401).json({ error: 'auth_required' });
+  if (!req.session?.userId) return res.status(401).json({ error: 'auth_required' });
+  const user = db.prepare('SELECT role, must_change_password FROM users WHERE username=?').get(req.session.userId);
+  if (!user) { req.session.destroy(() => {}); return res.status(401).json({ error: 'auth_required' }); }
+  res.json({ username: req.session.userId, role: user.role || 'admin', mustChangePassword: !!user.must_change_password });
 });
 
 router.post('/change-password', requireAuth, (req, res) => {
   const { currentPassword, newPassword } = req.body || {};
   if (!newPassword || newPassword.length < MIN_PASSWORD_LENGTH)
     return res.status(400).json({ error: 'weak_password', message: `Пароль должен быть не короче ${MIN_PASSWORD_LENGTH} символов` });
+  if (newPassword === currentPassword)
+    return res.status(400).json({ error: 'same_password', message: 'Новый пароль должен отличаться от текущего' });
   const user = db.prepare('SELECT * FROM users WHERE username=?').get(req.session.userId);
   if (!user || !verifyPassword(currentPassword || '', user.salt, user.hash))
     return res.status(401).json({ error: 'wrong_current_password' });
   const { salt, hash } = hashPassword(newPassword);
-  db.prepare('UPDATE users SET salt=?,hash=? WHERE username=?').run(salt, hash, user.username);
+  db.prepare('UPDATE users SET salt=?,hash=?,must_change_password=0 WHERE username=?').run(salt, hash, user.username);
+  logAudit(req, 'user.change_password', user.username);
   res.json({ ok: true });
 });
 
 router.get('/users', requireAdmin, (req, res) =>
-  res.json(db.prepare('SELECT username,role FROM users ORDER BY username').all())
+  res.json(db.prepare('SELECT username,role,must_change_password as mustChangePassword FROM users ORDER BY username').all()
+    .map(u => ({ ...u, mustChangePassword: !!u.mustChangePassword })))
 );
 
 router.post('/users', requireAdmin, (req, res) => {
@@ -68,7 +74,7 @@ router.post('/users', requireAdmin, (req, res) => {
     return res.status(409).json({ error: 'already_exists', message: 'Пользователь уже существует' });
   const finalRole = normalizeRole(role);
   const { salt, hash } = hashPassword(password);
-  db.prepare('INSERT INTO users (username,salt,hash,role) VALUES (?,?,?,?)').run(username, salt, hash, finalRole);
+  db.prepare('INSERT INTO users (username,salt,hash,role,must_change_password) VALUES (?,?,?,?,1)').run(username, salt, hash, finalRole);
   logAudit(req, 'user.create', `${username} (${finalRole})`);
   res.json({ ok: true });
 });

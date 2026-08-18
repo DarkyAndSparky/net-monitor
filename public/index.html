@@ -20,7 +20,24 @@
       <div class="modal-actions">
         <button type="submit" class="btn-primary" style="width:100%">Войти</button>
       </div>
-      <div class="hint" style="margin-top:6px;">По умолчанию: admin / admin — смените пароль после входа в разделе «Настройки».</div>
+      <div class="hint" style="margin-top:6px;">По умолчанию: admin / admin0000 — смена пароля потребуется сразу при первом входе.</div>
+    </form>
+  </div>
+</div>
+
+<!-- Принудительная смена пароля — показывается вместо приложения, пока пароль не сменён -->
+<div id="forced-pwchange-overlay" class="modal-overlay hidden">
+  <div class="modal">
+    <h2>🔒 Нужно сменить пароль</h2>
+    <p class="hint" style="margin:0 0 14px;">Вы вошли с паролем по умолчанию. Из соображений безопасности задайте новый пароль прежде чем продолжить работу.</p>
+    <form id="forced-pwchange-form">
+      <label>Текущий пароль<input type="password" id="fpw-current" autocomplete="current-password" required></label>
+      <label>Новый пароль (минимум 8 символов)<input type="password" id="fpw-new" autocomplete="new-password" required minlength="8"></label>
+      <label>Повторите новый пароль<input type="password" id="fpw-confirm" autocomplete="new-password" required minlength="8"></label>
+      <div id="forced-pwchange-error" class="form-error hidden"></div>
+      <div class="modal-actions">
+        <button type="submit" class="btn-primary" style="width:100%">Сменить пароль и продолжить</button>
+      </div>
     </form>
   </div>
 </div>

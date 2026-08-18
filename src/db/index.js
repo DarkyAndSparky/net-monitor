@@ -119,7 +119,8 @@ db.exec(`
     username TEXT PRIMARY KEY,
     salt     TEXT NOT NULL,
     hash     TEXT NOT NULL,
-    role     TEXT NOT NULL DEFAULT 'admin'
+    role     TEXT NOT NULL DEFAULT 'admin',
+    must_change_password INTEGER NOT NULL DEFAULT 0
   );
 
   CREATE TABLE IF NOT EXISTS settings (
@@ -217,10 +218,11 @@ function verifyPassword(password, salt, hash) {
   const check = crypto.scryptSync(password, salt, 64).toString('hex');
   return crypto.timingSafeEqual(Buffer.from(check), Buffer.from(hash));
 }
+const DEFAULT_ADMIN_PASSWORD = 'admin0000';
 if (!db.prepare('SELECT 1 FROM users LIMIT 1').get()) {
-  const { salt, hash } = hashPassword('admin');
-  db.prepare('INSERT INTO users (username,salt,hash,role) VALUES (?,?,?,?)').run('admin', salt, hash, 'admin');
-  process.stdout.write('[WARN] Создан пользователь по умолчанию: admin / admin — ОБЯЗАТЕЛЬНО смените пароль!\n');
+  const { salt, hash } = hashPassword(DEFAULT_ADMIN_PASSWORD);
+  db.prepare('INSERT INTO users (username,salt,hash,role,must_change_password) VALUES (?,?,?,?,1)').run('admin', salt, hash, 'admin');
+  process.stdout.write(`[WARN] Создан пользователь по умолчанию: admin / ${DEFAULT_ADMIN_PASSWORD} — смена пароля потребуется при первом входе\n`);
 }
 
 // ── Утилиты ───────────────────────────────────────────────────────────
