@@ -67,6 +67,59 @@ router.post('/add-bulk', requireOperator, (req, res) => {
   res.json({ok:true,created});
 });
 
+// Список устройств с включённым SNMP — для выбора точки обнаружения LLDP/CDP
+router.get('/lldp-cdp/devices', requireAuth, (req, res) => {
+  res.json(db.prepare("SELECT id,name,ip FROM devices WHERE snmp_enabled=1 AND ip!='' ORDER BY name").all());
+});
+
+// Автопостроение топологии через LLDP/CDP (SNMP), без привязки к MikroTik
+router.post('/topology/build-snmp/:deviceId', requireOperator, async (req, res) => {
+  const src = db.prepare('SELECT * FROM devices WHERE id=?').get(req.params.deviceId);
+  if (!src) return res.status(404).json({ error: 'not_found' });
+  if (!src.snmp_enabled || !src.ip) return res.status(400).json({ error: 'snmp_disabled', message: 'На устройстве не включён опрос по SNMP.' });
+
+  const { discoverNeighbors } = require('../services/lldpCdp');
+  let neighbors;
+  try {
+    neighbors = await discoverNeighbors(src);
+  } catch (err) {
+    return res.status(500).json({ error: 'snmp_failed', message: err.message });
+  }
+  if (!neighbors.length) return res.json({ ok: true, edgesCreated: 0, message: 'Соседей по LLDP/CDP не найдено (устройство может не поддерживать эти протоколы или они выключены).' });
+
+  const viaId = 'snmp:' + src.id;
+  db.prepare('DELETE FROM topology_edges WHERE via_router_id=?').run(viaId);
+
+  const findOrCreate = (n) => {
+    const ip = n.remoteIp || '';
+    let d = null;
+    if (ip) d = db.prepare('SELECT * FROM devices WHERE ip=?').get(ip);
+    if (!d && n.remoteName) d = db.prepare('SELECT * FROM devices WHERE name=? COLLATE NOCASE').get(n.remoteName);
+    if (d) return d;
+    if (!n.remoteName && !ip) return null;
+    const id = newId('d');
+    db.prepare(`INSERT INTO devices (id,name,ip,type,category_id,monitored,check_interval,alerts_enabled,source,x,y) VALUES (?,?,?,?,'other',0,?,1,?,?,?)`).run(
+      id, n.remoteName || ip || 'Сосед (LLDP/CDP)', ip, n.remotePlatform || '', DEFAULT_INT, 'lldp-cdp:' + src.name, 100 + Math.random() * 800, 100 + Math.random() * 500
+    );
+    return db.prepare('SELECT * FROM devices WHERE id=?').get(id);
+  };
+
+  const seen = new Set(); let edgesCreated = 0;
+  neighbors.forEach(n => {
+    const target = findOrCreate(n);
+    if (!target || target.id === src.id) return;
+    const key = target.id + '|' + (n.localPortDesc || '');
+    if (seen.has(key)) return; seen.add(key);
+    const label = n.remotePort ? `${n.localPortDesc || ''} → ${n.remotePort}`.trim() : (n.localPortDesc || '');
+    db.prepare('INSERT INTO topology_edges (id,from_id,to_id,label,iface,manual,via_router_id) VALUES (?,?,?,?,?,0,?)').run(
+      newId('e'), src.id, target.id, label, n.localPortDesc || '', viaId
+    );
+    edgesCreated++;
+  });
+
+  res.json({ ok: true, edgesCreated, protocol: neighbors[0]?.source || null, routerDeviceId: src.id });
+});
+
 // ══════════════════════════════════════════════════════════════════════
 //  ТОПОЛОГИЯ
 // ══════════════════════════════════════════════════════════════════════

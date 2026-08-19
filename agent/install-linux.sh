@@ -6,6 +6,15 @@
 #
 set -e
 
+case "$(locale charmap 2>/dev/null)" in
+  UTF-8|utf-8|UTF8|utf8) ;;
+  *)
+    echo "[!] Локаль консоли не UTF-8 - русский текст ниже может отображаться некорректно."
+    echo "    Решение: export LANG=C.UTF-8 (или ru_RU.UTF-8), затем запустите скрипт заново."
+    echo ""
+    ;;
+esac
+
 SERVER=""
 TOKEN=""
 INSECURE=""
@@ -26,14 +35,26 @@ if [ -z "$SERVER" ] || [ -z "$TOKEN" ]; then
   exit 1
 fi
 
-if [ "$EUID" -ne 0 ]; then
+if [ "$(id -u)" -ne 0 ]; then
   echo "Запустите с sudo: sudo bash install-linux.sh ..."
+  exit 1
+fi
+
+if ! command -v python3 &>/dev/null; then
+  echo "[ОШИБКА] python3 не найден. Установите его (например: sudo apt install python3)."
+  exit 1
+fi
+
+AGENT_SRC="$(dirname "$0")/netmonitor-agent.py"
+if [ ! -f "$AGENT_SRC" ]; then
+  echo "[ОШИБКА] Файл netmonitor-agent.py не найден рядом со скриптом."
+  echo "         Запускайте install-linux.sh из папки agent/."
   exit 1
 fi
 
 INSTALL_DIR="/opt/netmonitor-agent"
 mkdir -p "$INSTALL_DIR"
-cp "$(dirname "$0")/netmonitor-agent.py" "$INSTALL_DIR/"
+cp "$AGENT_SRC" "$INSTALL_DIR/"
 chmod +x "$INSTALL_DIR/netmonitor-agent.py"
 
 cat > /etc/systemd/system/netmonitor-agent.service << EOF

@@ -188,16 +188,64 @@ setInterval(trafficTick, TRAFFIC_TICK_MS);
 // ── Алерты ───────────────────────────────────────────────────────────
 async function sendTelegram(cfg, text) {
   if (!cfg.telegram?.enabled||!cfg.telegram.botToken||!cfg.telegram.chatId) return;
-  try { await fetch(`https://api.telegram.org/bot${cfg.telegram.botToken}/sendMessage`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:cfg.telegram.chatId,text,parse_mode:'HTML'})}); } catch(e){ logger.error({ err: e }, 'Telegram alert failed'); }
+  try { await fetch(`https://api.telegram.org/bot${cfg.telegram.botToken}/sendMessage`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:cfg.telegram.chatId,text,parse_mode:'HTML'})}); } catch(e){ log.error({ err: e }, 'Telegram alert failed'); }
 }
 async function sendWebhook(cfg, payload) {
   if (!cfg.webhook?.enabled||!cfg.webhook.url) return;
-  try { await fetch(cfg.webhook.url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); } catch(e){ logger.error({ err: e }, 'Webhook alert failed'); }
+  try { await fetch(cfg.webhook.url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); } catch(e){ log.error({ err: e }, 'Webhook alert failed'); }
+}
+async function sendNtfy(cfg, text, status) {
+  if (!cfg.ntfy?.enabled||!cfg.ntfy.url) return;
+  try {
+    const plain = text.replace(/<\/?b>/g,'').replace(/\\n/g,'\n');
+    const base = cfg.ntfy.url.replace(/\/+$/,'');
+    const topicUrl = cfg.ntfy.topic ? `${base}/${cfg.ntfy.topic}` : base;
+    const headers = { 'Content-Type': 'text/plain; charset=utf-8', 'Title': 'NetMonitor' };
+    if (status==='down') { headers['Priority']='high'; headers['Tags']='red_circle'; }
+    else if (status==='up') { headers['Priority']='default'; headers['Tags']='green_circle'; }
+    if (cfg.ntfy.authToken) headers['Authorization'] = `Bearer ${cfg.ntfy.authToken}`;
+    await fetch(topicUrl, { method:'POST', headers, body: plain });
+  } catch(e){ log.error({ err: e }, 'Ntfy alert failed'); }
+}
+let nodemailer = null; try { nodemailer = require('nodemailer'); } catch {}
+let cachedTransport = null, cachedTransportKey = null;
+function getTransport(cfg) {
+  const key = JSON.stringify(cfg);
+  if (cachedTransport && cachedTransportKey === key) return cachedTransport;
+  cachedTransport = nodemailer.createTransport({
+    host: cfg.host, port: cfg.port || 587,
+    secure: !!cfg.secure, // true → implicit TLS (обычно порт 465)
+    requireTLS: cfg.starttls !== false && !cfg.secure,
+    auth: (cfg.user && cfg.pass) ? { user: cfg.user, pass: cfg.pass } : undefined,
+    tls: { rejectUnauthorized: cfg.rejectUnauthorized !== false }
+  });
+  cachedTransportKey = key;
+  return cachedTransport;
+}
+async function sendEmail(cfg, subject, text, status) {
+  if (!cfg.email?.enabled || !cfg.email.host || !cfg.email.to) return;
+  if (!nodemailer) { log.warn('nodemailer не установлен, email-алерты недоступны'); return; }
+  try {
+    const transport = getTransport(cfg.email);
+    await transport.sendMail({
+      from: cfg.email.from || cfg.email.user || 'netmonitor@localhost',
+      to: cfg.email.to,
+      subject,
+      text: text.replace(/<\/?b>/g, '')
+    });
+  } catch (e) { log.error({ err: e }, 'Email alert failed'); }
 }
 async function dispatchAlert(cfg, device, status, text) {
+  const subject = status === 'down'
+    ? `🔴 NetMonitor: ${device.name} недоступно`
+    : status === 'up'
+      ? `🟢 NetMonitor: ${device.name} снова в сети`
+      : `NetMonitor: ${device.name}`;
   await Promise.all([
     sendTelegram(cfg, text),
-    sendWebhook(cfg, { device:{id:device.id,name:device.name,ip:device.ip,location:device.location}, status, message:text, time:new Date().toISOString() })
+    sendWebhook(cfg, { device:{id:device.id,name:device.name,ip:device.ip,location:device.location}, status, message:text, time:new Date().toISOString() }),
+    sendNtfy(cfg, text, status),
+    sendEmail(cfg, subject, text, status)
   ]);
 }
 async function evaluateAlert(device, online) {

@@ -1,7 +1,7 @@
 {
   "name": "net-monitor",
   "version": "26w32-b01",
-  "description": "Self-hosted network monitoring dashboard \u2014 devices, map, ping, SNMP, MikroTik, alerts",
+  "description": "Self-hosted network monitoring dashboard — devices, map, ping, SNMP, MikroTik, alerts",
   "main": "server.js",
   "engines": {
     "node": ">=22.5.0"
@@ -15,6 +15,7 @@
     "express-session": "^1.18.0",
     "net-snmp": "^3.0.0",
     "node-routeros": "^1.6.9",
+    "nodemailer": "^9.0.5",
     "pino": "^9.3.2",
     "pino-pretty": "^11.2.2",
     "pino-roll": "^1.0.0",

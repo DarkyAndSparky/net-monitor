@@ -30,12 +30,18 @@ function requireOperator(req, res, next) {
 }
 
 function logAudit(req, action, details = '') {
+  const username = req.session?.userId || '—';
+  const ip = req.ip;
   try {
     const features = getSetting('features') || {};
-    if (!features.auditLog) return;
-    db.prepare('INSERT INTO audit_log (ts,username,ip,action,details) VALUES (?,?,?,?,?)').run(
-      Date.now(), req.session?.userId || '—', req.ip, action, details
-    );
+    if (features.auditLog) {
+      db.prepare('INSERT INTO audit_log (ts,username,ip,action,details) VALUES (?,?,?,?,?)').run(
+        Date.now(), username, ip, action, details
+      );
+    }
+  } catch {}
+  try {
+    require('../services/eventWebhook').fireEvent(action, details, { username, ip });
   } catch {}
 }
 

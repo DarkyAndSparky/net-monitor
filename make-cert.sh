@@ -4,6 +4,15 @@
 set -e
 cd "$(dirname "$0")"
 
+case "$(locale charmap 2>/dev/null)" in
+  UTF-8|utf-8|UTF8|utf8) ;;
+  *)
+    echo "[!] Локаль консоли не UTF-8 - русский текст ниже может отображаться некорректно."
+    echo "    Решение: export LANG=C.UTF-8 (или ru_RU.UTF-8), затем запустите скрипт заново."
+    echo ""
+    ;;
+esac
+
 if ! command -v openssl &> /dev/null; then
   echo "[ERROR] openssl не найден. Установите его (обычно уже есть в Linux/macOS; в Ubuntu: sudo apt install openssl)."
   exit 1

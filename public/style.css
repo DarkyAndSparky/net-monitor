@@ -221,8 +221,21 @@ tr.skeleton-row td{padding:14px 12px;}
   padding:16px 20px; min-width:150px; flex:1;
 }
 .stat-card .num{font-size:28px; font-weight:700;}
+.stat-card .num.num-green{color:var(--green);}
+.stat-card .num.num-yellow{color:var(--yellow);}
+.stat-card .num.num-red{color:var(--red);}
 .stat-card .label{font-size:12px; color:var(--text-dim); margin-top:4px;}
 .stat-card .dot{display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px;}
+
+/* Heat map статусов */
+.heatmap-table{width:100%; border-collapse:separate; border-spacing:3px; margin:10px 0 20px;}
+.heatmap-table td.hm-name{font-size:12px; color:var(--text-dim); white-space:nowrap; padding-right:10px; text-align:right;}
+.heatmap-cell{width:16px; height:16px; border-radius:3px; display:inline-block; cursor:default;}
+.heatmap-cell.hm-nodata{background:var(--border);}
+.heatmap-row{display:flex; align-items:center; gap:3px; margin-bottom:3px;}
+.heatmap-names{display:inline-block; min-width:140px; font-size:12px; color:var(--text-dim); text-align:right; margin-right:8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.heatmap-days-header{display:flex; gap:3px; margin-left:148px; margin-bottom:4px;}
+.heatmap-days-header span{width:16px; font-size:9px; color:var(--text-dim); text-align:center;}
 
 .key-devices{display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px;}
 .key-device-card{

@@ -1,4 +1,5 @@
 @echo off
+chcp 65001 >nul
 REM Установка net-monitor агента как задачи Планировщика Windows
 REM
 REM Использование:
@@ -27,6 +28,12 @@ where python >nul 2>nul
 if errorlevel 1 (
   echo [ОШИБКА] Python не найден. Установите с https://python.org
   echo          При установке отметьте "Add Python to PATH"
+  exit /b 1
+)
+
+if not exist "%~dp0netmonitor-agent.py" (
+  echo [ОШИБКА] Файл netmonitor-agent.py не найден рядом со скриптом.
+  echo          Запускайте install-windows.bat из папки agent\.
   exit /b 1
 )
 

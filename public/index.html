@@ -82,7 +82,12 @@
     <section id="tab-dashboard" class="tab active">
       <h1>Дешборд мониторинга</h1>
 
+      <div class="cards-row" id="dashboard-widgets"></div>
+
       <div class="cards-row" id="category-cards"></div>
+
+      <h2>Карта статусов <span class="hint" id="heatmap-range-hint"></span></h2>
+      <div id="status-heatmap-wrap"></div>
 
       <h2>Ключевые устройства</h2>
       <div class="key-devices" id="key-devices"></div>
@@ -188,6 +193,20 @@
           <tbody id="discovery-mt-tbody"></tbody>
         </table>
         <button class="btn-secondary hidden" id="mt-add-selected" style="margin-top:10px;">Добавить отмеченные в реестр</button>
+      </div>
+
+      <h2>LLDP/CDP-обнаружение (по SNMP)</h2>
+      <div class="settings-panel" style="max-width:640px;">
+        <div class="controls" style="margin-bottom:10px;">
+          <select id="lldp-device-select"></select>
+          <button class="btn-primary" id="lldp-build-btn">Построить топологию через LLDP/CDP</button>
+        </div>
+        <p class="hint">
+          Работает с любым сетевым устройством с включённым SNMP-опросом (галочка в карточке устройства),
+          не только MikroTik. Сначала пробуется стандартный LLDP, если сосед не поддерживает его — CDP (Cisco).
+          Список ниже — устройства, у которых включён SNMP-опрос.
+        </p>
+        <div id="lldp-result" class="hint" style="margin:8px 0;"></div>
       </div>
     </section>
 
@@ -383,6 +402,7 @@
         <button class="settings-tab-btn admin-only" data-settings-tab="features">🧩 Функции</button>
         <button class="settings-tab-btn admin-only" data-settings-tab="io">⇅ Импорт/Экспорт</button>
         <button class="settings-tab-btn admin-only" data-settings-tab="audit">📜 Аудит-лог</button>
+        <button class="settings-tab-btn admin-only" data-settings-tab="event-webhook">🪝 Webhook-события</button>
         <button class="settings-tab-btn" data-settings-tab="profile">🔑 Профиль</button>
         <button class="settings-tab-btn admin-strict" data-settings-tab="about">ℹ О системе</button>
       </div>
@@ -460,6 +480,26 @@
             <label>Chat ID<input type="text" id="al-tg-chat" placeholder="-1001234567890 или ваш ID"></label>
           </div>
 
+          <div style="border-top:1px solid var(--border); margin:6px 0; padding-top:12px;">
+            <label class="checkbox-label"><input type="checkbox" id="al-ntfy-enabled"> Ntfy.sh (self-hosted push)</label>
+            <label>Сервер<input type="text" id="al-ntfy-url" placeholder="https://ntfy.sh"></label>
+            <label>Топик<input type="text" id="al-ntfy-topic" placeholder="netmonitor-alerts"></label>
+            <label>Токен авторизации (не обязательно)<input type="password" id="al-ntfy-token" placeholder="tk_..."></label>
+          </div>
+
+          <div style="border-top:1px solid var(--border); margin:6px 0; padding-top:12px;">
+            <label class="checkbox-label"><input type="checkbox" id="al-email-enabled"> Email (SMTP)</label>
+            <label>SMTP-сервер<input type="text" id="al-email-host" placeholder="smtp.yandex.ru"></label>
+            <div class="controls">
+              <label style="flex:1;">Порт<input type="text" id="al-email-port" placeholder="587"></label>
+              <label class="checkbox-label" style="align-self:flex-end; padding-bottom:8px;"><input type="checkbox" id="al-email-secure"> TLS с самого начала (порт 465)</label>
+            </div>
+            <label>Логин<input type="text" id="al-email-user" placeholder="netmonitor@example.com"></label>
+            <label>Пароль<input type="password" id="al-email-pass" placeholder="пароль или пароль приложения"></label>
+            <label>От кого (From, необязательно)<input type="text" id="al-email-from" placeholder="NetMonitor <netmonitor@example.com>"></label>
+            <label>Кому (можно несколько через запятую)<input type="text" id="al-email-to" placeholder="admin@example.com, noc@example.com"></label>
+          </div>
+
           <div id="escalation-block" class="hidden" style="border-top:1px solid var(--border); margin:6px 0; padding-top:12px;">
             <label class="checkbox-label"><input type="checkbox" id="al-esc-enabled"> Эскалация — доп. уведомление, если проблема не решается долго</label>
             <label>Через сколько минут простоя эскалировать
@@ -486,7 +526,9 @@
         </form>
         <p class="hint">
           Как получить Telegram Bot Token: напишите @BotFather → /newbot. Chat ID своего чата можно узнать у @userinfobot,
-          для группы — добавьте бота в группу и посмотрите ID через @RawDataBot.
+          для группы — добавьте бота в группу и посмотрите ID через @RawDataBot.<br>
+          Ntfy.sh: можно использовать публичный сервер ntfy.sh (укажите любой уникальный топик) или свой self-hosted инстанс. Токен нужен только если топик защищён доступом.<br>
+          Email: для Gmail/Yandex/Mail.ru обычно нужен «пароль приложения», а не обычный пароль от почты — включите двухфакторную аутентификацию и создайте отдельный пароль для SMTP в настройках почты. Порт 587 — STARTTLS (стандарт), порт 465 — TLS с самого начала.
           Оповещения по конкретному устройству можно отключить в его карточке (галочка «Уведомления») или во вкладке «Мониторинг».
         </p>
       </div>
@@ -654,8 +696,14 @@
       <h2 class="admin-only strict-admin-only">Аудит-лог</h2>
       <div class="settings-panel admin-only strict-admin-only" style="max-width:760px;">
         <p class="hint" id="audit-log-hint">Требует включения функции «Аудит-лог» в разделе «Функции».</p>
-        <div class="modal-actions hidden" id="audit-log-actions" style="justify-content:flex-start; margin-bottom:10px;">
-          <a class="btn-secondary" href="/api/audit-log/export.csv" style="text-decoration:none;">⬇ Скачать CSV</a>
+        <div class="modal-actions hidden" id="audit-log-actions" style="justify-content:flex-start; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+          <input type="text" id="audit-log-search" placeholder="Поиск: пользователь, действие, детали, IP..." style="min-width:240px; flex:1;">
+          <select id="audit-log-filter-action" style="min-width:160px;"><option value="">Все действия</option></select>
+          <select id="audit-log-filter-user" style="min-width:140px;"><option value="">Все пользователи</option></select>
+          <label class="hint" style="display:flex; align-items:center; gap:4px;">С <input type="date" id="audit-log-filter-from"></label>
+          <label class="hint" style="display:flex; align-items:center; gap:4px;">По <input type="date" id="audit-log-filter-to"></label>
+          <button type="button" class="btn-secondary" id="audit-log-reset-btn">Сбросить</button>
+          <a class="btn-secondary" href="/api/audit-log/export.csv" id="audit-log-export-link" style="text-decoration:none;">⬇ Скачать CSV</a>
         </div>
         <table id="audit-log-table" class="hidden">
           <thead><tr><th>Время</th><th>Пользователь</th><th>Действие</th><th>Детали</th></tr></thead>
@@ -668,6 +716,36 @@
             <button id="audit-log-next-btn">Вперёд ›</button>
           </div>
         </div>
+      </div>
+      </div>
+
+      <!-- WEBHOOK-СОБЫТИЯ -->
+      <div class="settings-subtab hidden" data-settings-panel="event-webhook">
+      <h2 class="admin-only">Webhook на любое событие</h2>
+      <div class="settings-panel admin-only" style="max-width:640px;">
+        <p class="hint">
+          В отличие от вкладки «Алерты» (только недоступность/восстановление устройств), сюда попадает
+          <b>любое действие в системе</b>: создание/удаление устройств, изменение пользователей, импорт,
+          смена настроек и т.д. — тот же набор событий, что пишется в аудит-лог. Работает независимо от того,
+          включён ли сам аудит-лог в разделе «Функции».
+        </p>
+        <form id="event-webhook-form">
+          <label class="checkbox-label"><input type="checkbox" id="ew-enabled"> Включить</label>
+          <label>URL<input type="text" id="ew-url" placeholder="https://example.com/hook"></label>
+          <label>Секрет для подписи (необязательно, придёт в заголовке X-Netmonitor-Secret)
+            <input type="password" id="ew-secret" placeholder="любая строка">
+          </label>
+          <label>Фильтр по событиям (необязательно — если ничего не выбрано, летят все события)</label>
+          <select id="ew-events" multiple size="8" style="width:100%;"></select>
+          <div class="modal-actions" style="justify-content:flex-start; gap:10px; margin-top:10px;">
+            <button type="submit" class="btn-secondary">Сохранить</button>
+            <button type="button" class="btn-primary" id="ew-test-btn">Отправить тестовое</button>
+          </div>
+          <div id="ew-result" class="hint" style="margin-top:8px;"></div>
+        </form>
+        <p class="hint">
+          Тело запроса: <code>{"event": "device.create", "details": "...", "user": "admin", "ip": "...", "time": "ISO-8601"}</code>
+        </p>
       </div>
       </div>
 

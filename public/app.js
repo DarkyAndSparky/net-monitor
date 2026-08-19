@@ -172,6 +172,7 @@ async function loadAll() {
     applyFeatureVisibility();
     fillCategorySelects();
     renderDashboard();
+    loadDashboardWidgets();
     renderDevices();
     renderMap();
     renderMonitoring();
@@ -330,6 +331,9 @@ async function refreshUptime() {
   renderDashboard();
 }
 setInterval(refreshUptime, 60000);
+setInterval(() => {
+  if (document.getElementById('tab-dashboard')?.classList.contains('active')) loadDashboardWidgets();
+}, 60000);
 
 function sparklineHTML(deviceId) {
   const info = UPTIME[deviceId];
@@ -387,6 +391,64 @@ function renderDashboard() {
       ${d.monitored ? sparklineHTML(d.id) : '<div class="hint">Включите мониторинг во вкладке «Мониторинг», чтобы видеть историю.</div>'}
     </div>`;
   }).join('') : `<div class="hint">Отметьте устройства как «ключевые» в форме редактирования — они появятся здесь.</div>`;
+}
+
+// ---------------- ДАШБОРД v2: SLA-виджеты и heat map ----------------
+function slaClass(pct) {
+  if (pct === null || pct === undefined) return '';
+  if (pct >= 99) return 'num-green';
+  if (pct >= 95) return 'num-yellow';
+  return 'num-red';
+}
+
+async function loadDashboardWidgets() {
+  if (!DEVICES.length) {
+    document.getElementById('dashboard-widgets').innerHTML = '';
+    document.getElementById('status-heatmap-wrap').innerHTML = '';
+    document.getElementById('heatmap-range-hint').textContent = '';
+    return;
+  }
+  try {
+    const data = await api('/api/dashboard/widgets?days=14').then(r => r.json());
+    const widgetsWrap = document.getElementById('dashboard-widgets');
+    const cards = [];
+    if (data.sla24h !== null) cards.push(`<div class="stat-card"><div class="num ${slaClass(data.sla24h)}">${data.sla24h}%</div><div class="label">SLA за 24 часа</div></div>`);
+    if (data.sla7d !== null) cards.push(`<div class="stat-card"><div class="num ${slaClass(data.sla7d)}">${data.sla7d}%</div><div class="label">SLA за 7 дней</div></div>`);
+    cards.push(`<div class="stat-card"><div class="num ${data.offline > 0 ? 'num-red' : 'num-green'}">${data.online}/${data.totalMonitored}</div><div class="label">В сети из отслеживаемых</div></div>`);
+    if (data.unknown > 0) cards.push(`<div class="stat-card"><div class="num">${data.unknown}</div><div class="label">Статус не определён</div></div>`);
+    if (data.openIncidents !== null) cards.push(`<div class="stat-card"><div class="num ${data.openIncidents > 0 ? 'num-red' : 'num-green'}">${data.openIncidents}</div><div class="label">Открытых инцидентов</div></div>`);
+    widgetsWrap.innerHTML = cards.join('');
+
+    renderStatusHeatmap(data);
+  } catch (e) { /* нет прав или сеть — просто не показываем */ }
+}
+
+function heatmapCellColor(pct) {
+  if (pct === null || pct === undefined) return '';
+  if (pct >= 99) return 'background:var(--green);';
+  if (pct >= 90) return `background:var(--yellow); opacity:${0.5 + (pct - 90) / 20};`;
+  return `background:var(--red); opacity:${0.5 + Math.min(pct, 50) / 100};`;
+}
+
+function renderStatusHeatmap(data) {
+  const wrap = document.getElementById('status-heatmap-wrap');
+  const hint = document.getElementById('heatmap-range-hint');
+  if (!data.heatmap.length) {
+    wrap.innerHTML = '<div class="hint">Нет устройств под мониторингом — heat map появится, когда будут накоплены данные.</div>';
+    hint.textContent = '';
+    return;
+  }
+  hint.textContent = `(${data.days[0]} — ${data.days[data.days.length - 1]})`;
+  const dayHeader = `<div class="heatmap-days-header">${data.days.map(d => `<span title="${d}">${d.slice(8, 10)}</span>`).join('')}</div>`;
+  const rows = data.heatmap.map(dev => {
+    const cells = dev.days.map(d => {
+      const pctLabel = d.pct === null ? 'нет данных' : `${d.pct}% онлайн`;
+      const cls = d.pct === null ? 'heatmap-cell hm-nodata' : 'heatmap-cell';
+      return `<span class="${cls}" style="${heatmapCellColor(d.pct)}" title="${esc(dev.name)} · ${d.date} · ${pctLabel}"></span>`;
+    }).join('');
+    return `<div class="heatmap-row"><span class="heatmap-names" title="${esc(dev.name)}">${esc(dev.name)}</span>${cells}</div>`;
+  }).join('');
+  wrap.innerHTML = dayHeader + rows;
 }
 
 // ---------------- DEVICES: TABLE / CARDS ----------------
@@ -1523,6 +1585,14 @@ async function initDiscoveryTab() {
       ? routers.map(r => `<option value="${r.id}">${esc(r.name)} (${esc(r.host)})</option>`).join('')
       : `<option value="">Сначала добавьте роутер в «Настройках»</option>`;
   } catch (e) { /* ignore */ }
+
+  try {
+    const devices = await api('/api/lldp-cdp/devices').then(r => r.json());
+    const sel = document.getElementById('lldp-device-select');
+    sel.innerHTML = devices.length
+      ? devices.map(d => `<option value="${d.id}">${esc(d.name)} (${esc(d.ip)})</option>`).join('')
+      : `<option value="">Нет устройств с включённым SNMP</option>`;
+  } catch (e) { /* ignore */ }
 }
 
 document.getElementById('scan-btn').addEventListener('click', async () => {
@@ -1666,6 +1736,24 @@ document.getElementById('build-topology-btn').addEventListener('click', async ()
   }
 });
 
+document.getElementById('lldp-build-btn').addEventListener('click', async () => {
+  const deviceId = document.getElementById('lldp-device-select').value;
+  const resBox = document.getElementById('lldp-result');
+  if (!deviceId) { resBox.textContent = 'Сначала выберите устройство с включённым SNMP.'; return; }
+  resBox.textContent = 'Опрашиваю устройство по LLDP/CDP (это может занять несколько секунд)...';
+  try {
+    const res = await api(`/api/topology/build-snmp/${deviceId}`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) { resBox.textContent = 'Ошибка: ' + (data.message || data.error); return; }
+    if (!data.edgesCreated) { resBox.textContent = data.message || 'Соседей не найдено.'; return; }
+    const proto = data.protocol === 'cdp' ? 'CDP' : 'LLDP';
+    resBox.textContent = `Готово (${proto}): построено связей — ${data.edgesCreated}. Откройте вкладку «Карта сети».`;
+    await loadAll();
+  } catch (e) {
+    resBox.textContent = 'Ошибка соединения с сервером.';
+  }
+});
+
 // ---------------- НАСТРОЙКИ: MIKROTIK (НЕСКОЛЬКО РОУТЕРОВ) ----------------
 // ---------------- ФИЧЕ-ФЛАГИ: показ/скрытие зависимого UI ----------------
 function applyFeatureVisibility() {
@@ -1715,21 +1803,59 @@ document.getElementById('features-form').addEventListener('submit', async (e) =>
 
 // ---------------- АУДИТ-ЛОГ ----------------
 let AUDIT_LOG_PAGE = 1;
+let AUDIT_LOG_FILTERS_LOADED = false;
+
+function buildAuditQuery() {
+  const params = new URLSearchParams();
+  params.set('page', AUDIT_LOG_PAGE);
+  params.set('pageSize', 50);
+  const search = document.getElementById('audit-log-search').value.trim();
+  const action = document.getElementById('audit-log-filter-action').value;
+  const user = document.getElementById('audit-log-filter-user').value;
+  const from = document.getElementById('audit-log-filter-from').value;
+  const to = document.getElementById('audit-log-filter-to').value;
+  if (search) params.set('search', search);
+  if (action) params.set('action', action);
+  if (user) params.set('user', user);
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  return params;
+}
+
+async function loadAuditFilterOptions() {
+  if (AUDIT_LOG_FILTERS_LOADED) return;
+  try {
+    const [actions, users] = await Promise.all([
+      api('/api/audit-log/actions').then(r => r.json()),
+      api('/api/audit-log/users').then(r => r.json())
+    ]);
+    const actionSel = document.getElementById('audit-log-filter-action');
+    actions.forEach(a => { const o = document.createElement('option'); o.value = a; o.textContent = a; actionSel.appendChild(o); });
+    const userSel = document.getElementById('audit-log-filter-user');
+    users.forEach(u => { const o = document.createElement('option'); o.value = u; o.textContent = u; userSel.appendChild(o); });
+    AUDIT_LOG_FILTERS_LOADED = true;
+  } catch (e) { /* ignore */ }
+}
+
 async function loadAuditLog(page) {
   if (page) AUDIT_LOG_PAGE = page;
+  await loadAuditFilterOptions();
   try {
-    const data = await api(`/api/audit-log?page=${AUDIT_LOG_PAGE}&pageSize=50`).then(r => r.json());
+    const query = buildAuditQuery();
+    document.getElementById('audit-log-export-link').href = `/api/audit-log/export.csv?${query.toString()}`;
+    const data = await api(`/api/audit-log?${query.toString()}`).then(r => r.json());
     const hint = document.getElementById('audit-log-hint');
     const table = document.getElementById('audit-log-table');
     const actions = document.getElementById('audit-log-actions');
     const pagination = document.getElementById('audit-log-pagination');
+    actions.classList.remove('hidden');
     if (!data.total) {
-      hint.textContent = 'Пока нет записей.';
-      table.classList.add('hidden'); actions.classList.add('hidden'); pagination.classList.add('hidden');
+      hint.textContent = 'Ничего не найдено.';
+      table.classList.add('hidden'); pagination.classList.add('hidden');
       return;
     }
     hint.textContent = '';
-    table.classList.remove('hidden'); actions.classList.remove('hidden'); pagination.classList.remove('hidden');
+    table.classList.remove('hidden'); pagination.classList.remove('hidden');
     document.getElementById('audit-log-tbody').innerHTML = data.entries.map(e => `
       <tr>
         <td class="last-checked">${new Date(e.t).toLocaleString('ru-RU')}</td>
@@ -1744,6 +1870,23 @@ async function loadAuditLog(page) {
 }
 document.getElementById('audit-log-prev-btn').addEventListener('click', () => loadAuditLog(AUDIT_LOG_PAGE - 1));
 document.getElementById('audit-log-next-btn').addEventListener('click', () => loadAuditLog(AUDIT_LOG_PAGE + 1));
+
+let auditSearchDebounce = null;
+document.getElementById('audit-log-search').addEventListener('input', () => {
+  clearTimeout(auditSearchDebounce);
+  auditSearchDebounce = setTimeout(() => loadAuditLog(1), 350);
+});
+['audit-log-filter-action', 'audit-log-filter-user', 'audit-log-filter-from', 'audit-log-filter-to'].forEach(id => {
+  document.getElementById(id).addEventListener('change', () => loadAuditLog(1));
+});
+document.getElementById('audit-log-reset-btn').addEventListener('click', () => {
+  document.getElementById('audit-log-search').value = '';
+  document.getElementById('audit-log-filter-action').value = '';
+  document.getElementById('audit-log-filter-user').value = '';
+  document.getElementById('audit-log-filter-from').value = '';
+  document.getElementById('audit-log-filter-to').value = '';
+  loadAuditLog(1);
+});
 
 // ---------------- ИНЦИДЕНТЫ ----------------
 async function loadIncidents() {
@@ -2303,6 +2446,18 @@ async function loadAlertSettings() {
     document.getElementById('al-tg-chat').value = cfg.telegram?.chatId || '';
     document.getElementById('al-wh-enabled').checked = !!cfg.webhook?.enabled;
     document.getElementById('al-wh-url').value = cfg.webhook?.url || '';
+    document.getElementById('al-ntfy-enabled').checked = !!cfg.ntfy?.enabled;
+    document.getElementById('al-ntfy-url').value = cfg.ntfy?.url || 'https://ntfy.sh';
+    document.getElementById('al-ntfy-topic').value = cfg.ntfy?.topic || '';
+    document.getElementById('al-ntfy-token').value = cfg.ntfy?.authToken || '';
+    document.getElementById('al-email-enabled').checked = !!cfg.email?.enabled;
+    document.getElementById('al-email-host').value = cfg.email?.host || '';
+    document.getElementById('al-email-port').value = cfg.email?.port || 587;
+    document.getElementById('al-email-secure').checked = !!cfg.email?.secure;
+    document.getElementById('al-email-user').value = cfg.email?.user || '';
+    document.getElementById('al-email-pass').value = cfg.email?.pass || '';
+    document.getElementById('al-email-from').value = cfg.email?.from || '';
+    document.getElementById('al-email-to').value = cfg.email?.to || '';
   } catch (e) { /* ignore */ }
 }
 
@@ -2322,6 +2477,22 @@ async function saveAlertSettings() {
       webhook: {
         enabled: document.getElementById('al-wh-enabled').checked,
         url: document.getElementById('al-wh-url').value
+      },
+      ntfy: {
+        enabled: document.getElementById('al-ntfy-enabled').checked,
+        url: document.getElementById('al-ntfy-url').value,
+        topic: document.getElementById('al-ntfy-topic').value,
+        authToken: document.getElementById('al-ntfy-token').value
+      },
+      email: {
+        enabled: document.getElementById('al-email-enabled').checked,
+        host: document.getElementById('al-email-host').value,
+        port: Number(document.getElementById('al-email-port').value) || 587,
+        secure: document.getElementById('al-email-secure').checked,
+        user: document.getElementById('al-email-user').value,
+        pass: document.getElementById('al-email-pass').value,
+        from: document.getElementById('al-email-from').value,
+        to: document.getElementById('al-email-to').value
       }
     })
   });
@@ -2576,7 +2747,66 @@ document.querySelectorAll('.settings-tab-btn').forEach(btn => {
     document.querySelector(`.settings-subtab[data-settings-panel="${btn.dataset.settingsTab}"]`).classList.remove('hidden');
     // Перезагружаем данные при открытии вкладки "О системе"
     if (btn.dataset.settingsTab === 'about') loadAboutPanel();
+    if (btn.dataset.settingsTab === 'event-webhook') loadEventWebhookForm();
   });
+});
+
+// ---------------- WEBHOOK НА ЛЮБОЕ СОБЫТИЕ ----------------
+const EVENT_WEBHOOK_ACTIONS = [
+  'device.create','device.update','device.delete','devices.import_csv',
+  'user.create','user.delete','user.role_change','user.change_password',
+  'maintenance.create','maintenance.delete',
+  'mikrotik_router.add','mikrotik_router.delete',
+  'cisco.add','cisco.delete','cisco.import',
+  'unifi.add','unifi.delete','unifi.import',
+  'agent.token_generate','agent.token_reset','agent.unlink',
+  'alert_settings.update','event_webhook.update','features.update',
+  'branding.update','categories.update','oui.refresh',
+  'backup.download','backup.restore'
+];
+
+function populateEventWebhookSelect() {
+  const sel = document.getElementById('ew-events');
+  if (sel.options.length) return;
+  EVENT_WEBHOOK_ACTIONS.forEach(a => { const o = document.createElement('option'); o.value = a; o.textContent = a; sel.appendChild(o); });
+}
+
+async function loadEventWebhookForm() {
+  populateEventWebhookSelect();
+  try {
+    const cfg = await api('/api/event-webhook').then(r => r.json());
+    document.getElementById('ew-enabled').checked = !!cfg.enabled;
+    document.getElementById('ew-url').value = cfg.url || '';
+    document.getElementById('ew-secret').value = cfg.secret || '';
+    const events = new Set(cfg.events || []);
+    Array.from(document.getElementById('ew-events').options).forEach(o => { o.selected = events.has(o.value); });
+  } catch (e) { /* ignore */ }
+}
+
+document.getElementById('event-webhook-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const events = Array.from(document.getElementById('ew-events').selectedOptions).map(o => o.value);
+  await api('/api/event-webhook', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      enabled: document.getElementById('ew-enabled').checked,
+      url: document.getElementById('ew-url').value,
+      secret: document.getElementById('ew-secret').value,
+      events
+    })
+  });
+  document.getElementById('ew-result').textContent = 'Настройки сохранены.';
+});
+
+document.getElementById('ew-test-btn').addEventListener('click', async () => {
+  const box = document.getElementById('ew-result');
+  box.textContent = 'Отправляю...';
+  try {
+    await api('/api/event-webhook/test', { method: 'POST' });
+    box.textContent = 'Тестовое событие отправлено.';
+  } catch (e) {
+    box.textContent = 'Ошибка отправки. Проверьте URL и настройки.';
+  }
 });
 
 // ---------------- БРЕНДИНГ: форма (только админ) ----------------

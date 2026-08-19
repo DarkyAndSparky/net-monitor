@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 cd "$(dirname "$0")"
 
+case "$(locale charmap 2>/dev/null)" in
+  UTF-8|utf-8|UTF8|utf8) ;;
+  *)
+    echo "[!] Локаль консоли не UTF-8 - русский текст ниже может отображаться некорректно."
+    echo "    Решение: export LANG=C.UTF-8 (или ru_RU.UTF-8), затем запустите скрипт заново."
+    echo ""
+    ;;
+esac
+
 echo ""
 echo " ╔══════════════════════════════════════════╗"
 echo " ║           net-monitor v0.9               ║"
@@ -21,7 +30,11 @@ fi
 # Зависимости
 if [ ! -d node_modules ]; then
   echo " Устанавливаю зависимости..."
-  npm install --silent
+  npm install --silent --no-audit --no-fund
+  if [ ! -d "node_modules/express" ]; then
+    echo " [ОШИБКА] npm install не смог поставить основные зависимости."
+    exit 1
+  fi
   echo " [OK] Зависимости установлены."
   echo ""
 fi
