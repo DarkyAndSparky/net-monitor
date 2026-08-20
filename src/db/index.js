@@ -49,12 +49,21 @@ db.exec(`
     sort  INTEGER NOT NULL DEFAULT 0
   );
 
+  CREATE TABLE IF NOT EXISTS sites (
+    id      TEXT PRIMARY KEY,
+    name    TEXT NOT NULL,
+    color   TEXT NOT NULL DEFAULT '#6b7280',
+    address TEXT NOT NULL DEFAULT '',
+    sort    INTEGER NOT NULL DEFAULT 0
+  );
+
   CREATE TABLE IF NOT EXISTS devices (
     id             TEXT PRIMARY KEY,
     name           TEXT NOT NULL DEFAULT 'Без имени',
     ip             TEXT NOT NULL DEFAULT '',
     mac            TEXT NOT NULL DEFAULT '',
     location       TEXT NOT NULL DEFAULT '',
+    site_id        TEXT,
     type           TEXT NOT NULL DEFAULT '',
     category_id    TEXT NOT NULL DEFAULT 'other',
     comment        TEXT NOT NULL DEFAULT '',
@@ -120,7 +129,8 @@ db.exec(`
     salt     TEXT NOT NULL,
     hash     TEXT NOT NULL,
     role     TEXT NOT NULL DEFAULT 'admin',
-    must_change_password INTEGER NOT NULL DEFAULT 0
+    must_change_password INTEGER NOT NULL DEFAULT 0,
+    source   TEXT NOT NULL DEFAULT 'local'
   );
 
   CREATE TABLE IF NOT EXISTS settings (
@@ -169,6 +179,12 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_agent_metrics_dev_ts ON agent_metrics(device_id, ts);
 `);
+
+// ── Миграция: колонка users.source для уже существующих БД ─────────────
+// (CREATE TABLE IF NOT EXISTS не добавляет новые колонки в существующую
+// таблицу — на старых установках без переустановки её нужно добавить руками)
+try { db.exec("ALTER TABLE users ADD COLUMN source TEXT NOT NULL DEFAULT 'local'"); } catch { /* уже есть */ }
+try { db.exec("ALTER TABLE devices ADD COLUMN site_id TEXT"); } catch { /* уже есть */ }
 
 // ── Дефолтные категории ───────────────────────────────────────────────
 const DEF_CATS = [
@@ -243,7 +259,7 @@ function deviceRow(r) {
   if (!r) return null;
   return {
     id: r.id, name: r.name, ip: r.ip, mac: r.mac,
-    location: r.location, type: r.type, category: r.category_id,
+    location: r.location, site: r.site_id, type: r.type, category: r.category_id,
     comment: r.comment, key: !!r.is_key, monitored: !!r.monitored,
     checkInterval: r.check_interval, alertsEnabled: !!r.alerts_enabled,
     source: r.source,

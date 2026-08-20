@@ -22,32 +22,9 @@ function parseCsvLine(line) {
   out.push(cur); return out.map(s=>s.trim());
 }
 
-// Категории
-router.get('/categories', requireAuth, (req, res) =>
-  res.json(db.prepare('SELECT * FROM categories ORDER BY sort,name').all())
-);
-router.post('/categories', requireOperator, (req, res) => {
-  const { categories } = req.body || {};
-  if (!Array.isArray(categories) || !categories.length)
-    return res.status(400).json({ error: 'categories_required', message: 'Нужна хотя бы одна категория' });
-  const newIds = new Set();
-  for (const c of categories) {
-    if (!c.name?.trim()) return res.status(400).json({ error: 'invalid_category', message: 'У категории должно быть название' });
-    if (c.color && !/^#[0-9a-fA-F]{6}$/.test(c.color)) return res.status(400).json({ error: 'invalid_color' });
-    const id = c.id || slugify(c.name);
-    if (newIds.has(id)) return res.status(400).json({ error: 'duplicate_id' });
-    newIds.add(id);
-  }
-  const usedIds = new Set(db.prepare('SELECT DISTINCT category_id FROM devices').all().map(r => r.category_id));
-  const removedUsed = [...usedIds].filter(id => !newIds.has(id));
-  if (removedUsed.length) return res.status(400).json({ error: 'category_in_use', message: `Используется устройствами: ${removedUsed.join(', ')}` });
-  db.transaction(() => {
-    db.prepare('DELETE FROM categories').run();
-    categories.forEach((c, i) => db.prepare('INSERT INTO categories (id,name,color,sort) VALUES (?,?,?,?)').run(c.id||slugify(c.name), c.name.trim(), c.color||'#6b7280', i));
-  })();
-  logAudit(req, 'categories.update', `${categories.length} категорий`);
-  res.json(db.prepare('SELECT * FROM categories ORDER BY sort').all());
-});
+// Категории и площадки (Multi-site) вынесены в settings.js — там роутер
+// монтируется на /api напрямую, а этот файл монтируется на /api/devices,
+// так что /categories и /sites здесь были бы недостижимы как /api/categories.
 
 // Устройства: CRUD
 router.get('/', requireAuth, (req, res) =>
@@ -57,9 +34,9 @@ router.get('/', requireAuth, (req, res) =>
 router.post('/', requireOperator, (req, res) => {
   const b = req.body || {};
   const id = newId('d');
-  db.prepare(`INSERT INTO devices (id,name,ip,mac,location,type,category_id,comment,is_key,monitored,check_interval,alerts_enabled,source,snmp_enabled,snmp_community,snmp_port,snmp_if_index,port_checks,x,y)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
-    id, b.name||'Без имени', b.ip||'', b.mac||'', b.location||'', b.type||'', b.category||'other',
+  db.prepare(`INSERT INTO devices (id,name,ip,mac,location,site_id,type,category_id,comment,is_key,monitored,check_interval,alerts_enabled,source,snmp_enabled,snmp_community,snmp_port,snmp_if_index,port_checks,x,y)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+    id, b.name||'Без имени', b.ip||'', b.mac||'', b.location||'', b.site||null, b.type||'', b.category||'other',
     b.comment||'', b.key?1:0, b.monitored!==false?1:0,
     Math.max(MIN_INTERVAL, Number(b.checkInterval)||DEFAULT_INTERVAL),
     b.alertsEnabled!==false?1:0, b.source||'manual',
@@ -77,8 +54,8 @@ router.put('/:id', requireOperator, (req, res) => {
   if (!row) return res.status(404).json({ error: 'not_found' });
   const b = req.body || {};
   const posOnly = Object.keys(b).every(k => ['x','y'].includes(k));
-  db.prepare(`UPDATE devices SET name=?,ip=?,mac=?,location=?,type=?,category_id=?,comment=?,is_key=?,monitored=?,check_interval=?,alerts_enabled=?,snmp_enabled=?,snmp_community=?,snmp_port=?,snmp_if_index=?,port_checks=?,x=?,y=?,updated_at=? WHERE id=?`).run(
-    b.name??row.name, b.ip??row.ip, b.mac??row.mac, b.location??row.location, b.type??row.type,
+  db.prepare(`UPDATE devices SET name=?,ip=?,mac=?,location=?,site_id=?,type=?,category_id=?,comment=?,is_key=?,monitored=?,check_interval=?,alerts_enabled=?,snmp_enabled=?,snmp_community=?,snmp_port=?,snmp_if_index=?,port_checks=?,x=?,y=?,updated_at=? WHERE id=?`).run(
+    b.name??row.name, b.ip??row.ip, b.mac??row.mac, b.location??row.location, b.site!==undefined?(b.site||null):row.site_id, b.type??row.type,
     b.category??row.category_id, b.comment??row.comment,
     b.key!==undefined?(b.key?1:0):row.is_key,
     b.monitored!==undefined?(b.monitored?1:0):row.monitored,

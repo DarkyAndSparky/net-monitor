@@ -80,7 +80,10 @@
 
     <!-- ДЕШБОРД -->
     <section id="tab-dashboard" class="tab active">
-      <h1>Дешборд мониторинга</h1>
+      <div class="controls" style="justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <h1 style="margin:0;">Дешборд мониторинга</h1>
+        <select id="dashboard-site-select" style="min-width:180px;"><option value="">Все площадки</option></select>
+      </div>
 
       <div class="cards-row" id="dashboard-widgets"></div>
 
@@ -398,11 +401,13 @@
         <button class="settings-tab-btn admin-only" data-settings-tab="alerts">🔔 Алерты</button>
         <button class="settings-tab-btn admin-only" data-settings-tab="mikrotik">🔌 Интеграции</button>
         <button class="settings-tab-btn admin-only" data-settings-tab="categories">🏷 Категории</button>
+        <button class="settings-tab-btn admin-only" data-settings-tab="sites">🏢 Площадки</button>
         <button class="settings-tab-btn admin-only" data-settings-tab="users">👥 Пользователи</button>
         <button class="settings-tab-btn admin-only" data-settings-tab="features">🧩 Функции</button>
         <button class="settings-tab-btn admin-only" data-settings-tab="io">⇅ Импорт/Экспорт</button>
         <button class="settings-tab-btn admin-only" data-settings-tab="audit">📜 Аудит-лог</button>
         <button class="settings-tab-btn admin-only" data-settings-tab="event-webhook">🪝 Webhook-события</button>
+        <button class="settings-tab-btn admin-only" data-settings-tab="ldap">🔐 LDAP/AD</button>
         <button class="settings-tab-btn" data-settings-tab="profile">🔑 Профиль</button>
         <button class="settings-tab-btn admin-strict" data-settings-tab="about">ℹ О системе</button>
       </div>
@@ -597,6 +602,25 @@
       </div>
       </div>
 
+      <!-- ПЛОЩАДКИ (MULTI-SITE) -->
+      <div class="settings-subtab hidden" data-settings-panel="sites">
+      <h2 class="admin-only">Площадки (филиалы)</h2>
+      <div class="settings-panel admin-only" style="max-width:640px;">
+        <p class="hint">Удобно для компаний с несколькими удалёнными офисами/объектами: привяжите устройства к площадкам, и на дешборде можно будет переключаться между ними или смотреть все сразу. Нельзя удалить площадку, пока на неё ссылается хотя бы одно устройство.</p>
+        <table id="sites-table" style="margin-bottom:12px;">
+          <thead><tr><th>Название</th><th>Адрес/комментарий</th><th>Цвет</th><th></th></tr></thead>
+          <tbody id="sites-tbody"></tbody>
+        </table>
+        <div class="modal-actions" style="justify-content:flex-start; gap:10px;">
+          <button type="button" class="btn-secondary" id="site-add-row">+ Добавить площадку</button>
+        </div>
+        <div id="sites-result" class="hint" style="margin:8px 0;"></div>
+        <div class="modal-actions" style="justify-content:flex-start;">
+          <button type="button" class="btn-primary" id="sites-save">Сохранить площадки</button>
+        </div>
+      </div>
+      </div>
+
       <!-- ПОЛЬЗОВАТЕЛИ -->
       <div class="settings-subtab hidden" data-settings-panel="users">
       <h2 class="admin-only strict-admin-only">Пользователи</h2>
@@ -749,6 +773,45 @@
       </div>
       </div>
 
+      <!-- LDAP/AD -->
+      <div class="settings-subtab hidden" data-settings-panel="ldap">
+      <h2 class="admin-only">Аутентификация через LDAP/Active Directory</h2>
+      <div class="settings-panel admin-only" style="max-width:680px;">
+        <p class="hint">
+          Работает как дополнение к локальным учётным записям, не замена: если логин уже существует локально
+          (например ваш admin) — используется локальный пароль как обычно. Если логина нет локально — при
+          включённом LDAP выполняется поиск и проверка пароля в каталоге, при успехе учётная запись создаётся
+          автоматически с ролью по группам. Пароль LDAP-пользователей нигде не хранится в NetMonitor.
+        </p>
+        <form id="ldap-form">
+          <label class="checkbox-label"><input type="checkbox" id="ldap-enabled"> Включить вход через LDAP/AD</label>
+          <label>URL сервера<input type="text" id="ldap-url" placeholder="ldap://dc1.example.local:389 или ldaps://dc1.example.local:636"></label>
+          <label class="checkbox-label"><input type="checkbox" id="ldap-reject-unauthorized" checked> Проверять TLS-сертификат сервера (отключайте только для self-signed в закрытой сети)</label>
+          <label>Bind DN (сервисная учётная запись, только чтение)<input type="text" id="ldap-binddn" placeholder="CN=svc-netmonitor,OU=Service Accounts,DC=example,DC=local"></label>
+          <label>Пароль Bind DN<input type="password" id="ldap-bindpass" placeholder="пароль сервисной учётки"></label>
+          <label>Base DN (где искать пользователей)<input type="text" id="ldap-basedn" placeholder="OU=Users,DC=example,DC=local"></label>
+          <label>Фильтр поиска пользователя<input type="text" id="ldap-userfilter" value="(sAMAccountName={{username}})"></label>
+          <label>Роль по умолчанию (если группа не совпала ни с одним правилом)
+            <select id="ldap-defaultrole">
+              <option value="viewer">Наблюдатель</option>
+              <option value="operator">Оператор</option>
+              <option value="admin">Администратор</option>
+            </select>
+          </label>
+
+          <label style="margin-top:6px;">Роли по группам (DN группы → роль, проверяются сверху вниз)</label>
+          <div id="ldap-role-rules"></div>
+          <button type="button" class="btn-secondary" id="ldap-add-rule-btn" style="margin:6px 0 12px;">+ Добавить правило</button>
+
+          <div class="modal-actions" style="justify-content:flex-start; gap:10px;">
+            <button type="submit" class="btn-secondary">Сохранить</button>
+            <button type="button" class="btn-primary" id="ldap-test-btn">Проверить соединение (Bind DN)</button>
+          </div>
+          <div id="ldap-result" class="hint" style="margin-top:8px;"></div>
+        </form>
+      </div>
+      </div>
+
       <!-- ПРОФИЛЬ -->
       <div class="settings-subtab hidden" data-settings-panel="profile">
       <h2>Смена пароля</h2>
@@ -848,6 +911,7 @@
 
       <!-- Вкладка 3: Дополнительно -->
       <div class="tab-panel hidden" id="tab-advanced">
+        <label>Площадка<select id="f-site"></select></label>
         <label>Расположение<input type="text" id="f-location" placeholder="Этаж 1, каб. 3"></label>
         <label>Комментарий<textarea id="f-comment" rows="3"></textarea></label>
       </div>

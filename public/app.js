@@ -1,5 +1,6 @@
 let DEVICES = [];
 let CATEGORIES = [];
+let SITES = [];
 let TOPOLOGY = { edges: [] }; // реальные связи устройств, построенные автообнаружением
 let FEATURES = { snmp: false, portChecks: false, incidents: false, auditLog: false }; // дополнительные модули
 let STATUS = {};   // id -> { online: true|false|null, monitored: bool, lastChecked: number|null }
@@ -160,17 +161,20 @@ async function api(url, opts) {
 // ---------------- LOAD ----------------
 async function loadAll() {
   try {
-    const [devices, categories] = await Promise.all([
+    const [devices, categories, sites] = await Promise.all([
       api('/api/devices').then(r => r.json()),
-      api('/api/categories').then(r => r.json())
+      api('/api/categories').then(r => r.json()),
+      api('/api/sites').then(r => r.json()).catch(() => [])
     ]);
     DEVICES = devices;
     CATEGORIES = categories;
+    SITES = sites;
     try { TOPOLOGY = await api('/api/topology').then(r => r.json()); } catch (e) { TOPOLOGY = { edges: [] }; }
     try { SUBNET_RULES = await api('/api/subnet-rules').then(r => r.json()); } catch (e) { SUBNET_RULES = []; }
     try { FEATURES = await api('/api/features').then(r => r.json()); } catch (e) { /* оставляем дефолт: всё выключено */ }
     applyFeatureVisibility();
     fillCategorySelects();
+    fillSiteSelects();
     renderDashboard();
     loadDashboardWidgets();
     renderDevices();
@@ -347,27 +351,33 @@ function sparklineHTML(deviceId) {
 }
 
 // ---------------- DASHBOARD ----------------
+function currentDashboardSite() {
+  return document.getElementById('dashboard-site-select')?.value || '';
+}
 function renderDashboard() {
+  const siteFilter = currentDashboardSite();
+  const scopedDevices = siteFilter ? DEVICES.filter(d => d.site === siteFilter) : DEVICES;
+
   const cardsWrap = document.getElementById('category-cards');
   cardsWrap.innerHTML = CATEGORIES.map(c => {
-    const count = DEVICES.filter(d => d.category === c.id).length;
+    const count = scopedDevices.filter(d => d.category === c.id).length;
     return `<div class="stat-card">
       <div class="num"><span class="dot" style="background:${esc(c.color)}"></span>${count}</div>
       <div class="label">${esc(c.name)}</div>
     </div>`;
   }).join('') + `<div class="stat-card">
-      <div class="num">${DEVICES.length}</div>
-      <div class="label">Всего устройств</div>
+      <div class="num">${scopedDevices.length}</div>
+      <div class="label">Всего устройств${siteFilter ? ' на площадке' : ''}</div>
     </div>`;
 
-  const key = DEVICES.filter(d => d.key);
+  const key = scopedDevices.filter(d => d.key);
   const keyWrap = document.getElementById('key-devices');
-  if (!DEVICES.length) {
+  if (!scopedDevices.length) {
     keyWrap.innerHTML = `<div class="empty-state">
       <i class="ti ti-server-off"></i>
-      <h3>Устройств пока нет</h3>
-      <p>Добавьте первое устройство вручную или импортируйте из MikroTik / CSV.</p>
-      ${CURRENT_ROLE !== 'viewer' ? "<button class=\"empty-action\" onclick=\"showTab(&quot;devices&quot;);openAdd()\">+ Добавить устройство</button>" : ''}
+      <h3>${siteFilter ? 'На этой площадке пока нет устройств' : 'Устройств пока нет'}</h3>
+      <p>${siteFilter ? 'Привяжите устройства к площадке в форме редактирования.' : 'Добавьте первое устройство вручную или импортируйте из MikroTik / CSV.'}</p>
+      ${!siteFilter && CURRENT_ROLE !== 'viewer' ? "<button class=\"empty-action\" onclick=\"showTab(&quot;devices&quot;);openAdd()\">+ Добавить устройство</button>" : ''}
     </div>`;
     return;
   }
@@ -393,6 +403,11 @@ function renderDashboard() {
   }).join('') : `<div class="hint">Отметьте устройства как «ключевые» в форме редактирования — они появятся здесь.</div>`;
 }
 
+document.getElementById('dashboard-site-select').addEventListener('change', () => {
+  renderDashboard();
+  loadDashboardWidgets();
+});
+
 // ---------------- ДАШБОРД v2: SLA-виджеты и heat map ----------------
 function slaClass(pct) {
   if (pct === null || pct === undefined) return '';
@@ -409,7 +424,8 @@ async function loadDashboardWidgets() {
     return;
   }
   try {
-    const data = await api('/api/dashboard/widgets?days=14').then(r => r.json());
+    const siteFilter = currentDashboardSite();
+    const data = await api(`/api/dashboard/widgets?days=14${siteFilter ? '&site=' + encodeURIComponent(siteFilter) : ''}`).then(r => r.json());
     const widgetsWrap = document.getElementById('dashboard-widgets');
     const cards = [];
     if (data.sla24h !== null) cards.push(`<div class="stat-card"><div class="num ${slaClass(data.sla24h)}">${data.sla24h}%</div><div class="label">SLA за 24 часа</div></div>`);
@@ -1276,6 +1292,7 @@ function duplicateDevice(id) {
   openAdd();
   document.getElementById('f-name').value = src.name + ' (копия)';
   document.getElementById('f-location').value = src.location || '';
+  document.getElementById('f-site').value = src.site || '';
   setDeviceTypeField(src.type || '');
   document.getElementById('f-category').value = src.category || 'other';
   document.getElementById('f-comment').value = src.comment || '';
@@ -1319,6 +1336,7 @@ function openEdit(id) {
   document.getElementById('f-ip').value = d.ip;
   document.getElementById('f-mac').value = d.mac;
   document.getElementById('f-location').value = d.location;
+  document.getElementById('f-site').value = d.site || '';
   setDeviceTypeField(d.type);
   document.getElementById('f-category').value = d.category;
   document.getElementById('f-comment').value = d.comment;
@@ -1382,6 +1400,7 @@ document.getElementById('device-form').addEventListener('submit', async (e) => {
     name: document.getElementById('f-name').value,
     ip, mac,
     location: document.getElementById('f-location').value,
+    site: document.getElementById('f-site').value || null,
     type: getDeviceTypeValue(),
     category: document.getElementById('f-category').value,
     comment: document.getElementById('f-comment').value,
@@ -1945,6 +1964,7 @@ async function loadSettings() {
   loadOuiStatus(); // доступно всем ролям (кнопка обновления — только админу)
   if (CURRENT_ROLE === 'viewer') return; // у viewer в «Настройках» доступна только смена пароля и статус OUI
   renderCategoriesTable();
+  renderSitesTable();
   await Promise.all([loadConnections(), loadAlertSettings()]);
   if (CURRENT_ROLE !== 'admin') return; // Operator не видит пользователей/функции/брендинг/бэкап/аудит-лог/о системе
   await Promise.all([loadUsers(), loadFeaturesForm(), loadBrandingForm(), loadAboutPanel()]);
@@ -2249,6 +2269,65 @@ document.getElementById('categories-save').addEventListener('click', async () =>
   renderDevices();
   renderMap();
 });
+
+// ---------------- ПЛОЩАДКИ (MULTI-SITE) ----------------
+function renderSitesTable() {
+  const tbody = document.getElementById('sites-tbody');
+  tbody.innerHTML = SITES.map((s, i) => `
+    <tr data-idx="${i}" data-id="${esc(s.id)}">
+      <td><input type="text" class="site-name" value="${esc(s.name)}"></td>
+      <td><input type="text" class="site-address" value="${esc(s.address || '')}" placeholder="г. Москва, ул. ..."></td>
+      <td><input type="color" class="site-color" value="${esc(s.color)}"></td>
+      <td><button class="small-btn site-remove">✕</button></td>
+    </tr>`).join('');
+  tbody.querySelectorAll('.site-remove').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = Number(btn.closest('tr').dataset.idx);
+      SITES.splice(idx, 1);
+      renderSitesTable();
+    });
+  });
+}
+
+document.getElementById('site-add-row').addEventListener('click', () => {
+  SITES.push({ id: null, name: '', address: '', color: '#6b7280' });
+  renderSitesTable();
+});
+
+document.getElementById('sites-save').addEventListener('click', async () => {
+  const rows = [...document.querySelectorAll('#sites-tbody tr')];
+  const sites = rows.map(tr => ({
+    id: tr.dataset.id || null,
+    name: tr.querySelector('.site-name').value.trim(),
+    address: tr.querySelector('.site-address').value.trim(),
+    color: tr.querySelector('.site-color').value
+  })).filter(s => s.name);
+  const resultBox = document.getElementById('sites-result');
+  const res = await api('/api/sites', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sites })
+  });
+  const data = await res.json();
+  if (!res.ok) { resultBox.textContent = 'Ошибка: ' + (data.message || data.error); return; }
+  SITES = data;
+  resultBox.textContent = 'Сохранено.';
+  renderSitesTable();
+  fillSiteSelects();
+  renderDashboard();
+  loadDashboardWidgets();
+  renderDevices();
+});
+
+function fillSiteSelects() {
+  const opts = `<option value="">Без площадки</option>` + SITES.map(s => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
+  const formSel = document.getElementById('f-site');
+  if (formSel) formSel.innerHTML = opts;
+  const dashSel = document.getElementById('dashboard-site-select');
+  if (dashSel) {
+    const prev = dashSel.value;
+    dashSel.innerHTML = `<option value="">Все площадки</option>` + SITES.map(s => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
+    if (SITES.some(s => s.id === prev)) dashSel.value = prev;
+  }
+}
 
 // ---------------- ИНТЕГРАЦИИ: единый список подключений (MikroTik / UniFi / Cisco) ----------------
 const CONN_TYPE_LABELS = { mikrotik: 'MikroTik', unifi: 'UniFi', cisco: 'Cisco' };
@@ -2576,6 +2655,7 @@ async function loadUsers() {
     document.getElementById('users-tbody').innerHTML = users.map(u => `
       <tr>
         <td>${esc(u.username)}${u.username === meRes.username ? ' <span class="hint">(вы)</span>' : ''}
+          ${u.source === 'ldap' ? '<span class="status-badge status-unknown" style="margin-left:6px;" title="Учётная запись создана автоматически при входе через LDAP/AD">LDAP</span>' : ''}
           ${u.mustChangePassword ? '<span class="status-badge status-offline" style="margin-left:6px;" title="Ещё не сменил пароль по умолчанию">пароль не сменён</span>' : ''}
         </td>
         <td>
@@ -2748,6 +2828,7 @@ document.querySelectorAll('.settings-tab-btn').forEach(btn => {
     // Перезагружаем данные при открытии вкладки "О системе"
     if (btn.dataset.settingsTab === 'about') loadAboutPanel();
     if (btn.dataset.settingsTab === 'event-webhook') loadEventWebhookForm();
+    if (btn.dataset.settingsTab === 'ldap') loadLdapForm();
   });
 });
 
@@ -2762,7 +2843,7 @@ const EVENT_WEBHOOK_ACTIONS = [
   'agent.token_generate','agent.token_reset','agent.unlink',
   'alert_settings.update','event_webhook.update','features.update',
   'branding.update','categories.update','oui.refresh',
-  'backup.download','backup.restore'
+  'backup.download','backup.restore','ldap.update'
 ];
 
 function populateEventWebhookSelect() {
@@ -2806,6 +2887,93 @@ document.getElementById('ew-test-btn').addEventListener('click', async () => {
     box.textContent = 'Тестовое событие отправлено.';
   } catch (e) {
     box.textContent = 'Ошибка отправки. Проверьте URL и настройки.';
+  }
+});
+
+// ---------------- LDAP/AD ----------------
+function ldapRuleRow(rule = { group: '', role: 'viewer' }) {
+  const div = document.createElement('div');
+  div.className = 'controls';
+  div.style.marginBottom = '6px';
+  div.innerHTML = `
+    <input type="text" class="ldap-rule-group" placeholder="CN=NetAdmins,OU=Groups,DC=example,DC=local" value="${esc(rule.group)}" style="flex:2;">
+    <select class="ldap-rule-role" style="flex:1;">
+      <option value="admin">Администратор</option>
+      <option value="operator">Оператор</option>
+      <option value="viewer">Наблюдатель</option>
+    </select>
+    <button type="button" class="small-btn ldap-rule-remove" title="Удалить правило">✕</button>
+  `;
+  div.querySelector('.ldap-rule-role').value = rule.role;
+  div.querySelector('.ldap-rule-remove').addEventListener('click', () => div.remove());
+  return div;
+}
+
+document.getElementById('ldap-add-rule-btn').addEventListener('click', () => {
+  document.getElementById('ldap-role-rules').appendChild(ldapRuleRow());
+});
+
+async function loadLdapForm() {
+  try {
+    const cfg = await api('/api/ldap').then(r => r.json());
+    document.getElementById('ldap-enabled').checked = !!cfg.enabled;
+    document.getElementById('ldap-url').value = cfg.url || '';
+    document.getElementById('ldap-reject-unauthorized').checked = cfg.rejectUnauthorized !== false;
+    document.getElementById('ldap-binddn').value = cfg.bindDN || '';
+    document.getElementById('ldap-bindpass').value = cfg.bindPassword || '';
+    document.getElementById('ldap-basedn').value = cfg.baseDN || '';
+    document.getElementById('ldap-userfilter').value = cfg.userFilter || '(sAMAccountName={{username}})';
+    document.getElementById('ldap-defaultrole').value = cfg.defaultRole || 'viewer';
+    const rulesWrap = document.getElementById('ldap-role-rules');
+    rulesWrap.innerHTML = '';
+    (cfg.roleMapping || []).forEach(r => rulesWrap.appendChild(ldapRuleRow(r)));
+  } catch (e) { /* ignore */ }
+}
+
+document.getElementById('ldap-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const roleMapping = Array.from(document.querySelectorAll('#ldap-role-rules > div')).map(div => ({
+    group: div.querySelector('.ldap-rule-group').value.trim(),
+    role: div.querySelector('.ldap-rule-role').value
+  })).filter(r => r.group);
+  await api('/api/ldap', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      enabled: document.getElementById('ldap-enabled').checked,
+      url: document.getElementById('ldap-url').value,
+      rejectUnauthorized: document.getElementById('ldap-reject-unauthorized').checked,
+      bindDN: document.getElementById('ldap-binddn').value,
+      bindPassword: document.getElementById('ldap-bindpass').value,
+      baseDN: document.getElementById('ldap-basedn').value,
+      userFilter: document.getElementById('ldap-userfilter').value,
+      defaultRole: document.getElementById('ldap-defaultrole').value,
+      roleMapping
+    })
+  });
+  document.getElementById('ldap-result').textContent = 'Настройки сохранены.';
+});
+
+document.getElementById('ldap-test-btn').addEventListener('click', async () => {
+  const box = document.getElementById('ldap-result');
+  box.textContent = 'Проверяю соединение...';
+  const passVal = document.getElementById('ldap-bindpass').value;
+  try {
+    const res = await api('/api/ldap/test', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(passVal === '••••••••'
+        ? { useSaved: true }
+        : {
+            url: document.getElementById('ldap-url').value,
+            rejectUnauthorized: document.getElementById('ldap-reject-unauthorized').checked,
+            bindDN: document.getElementById('ldap-binddn').value,
+            bindPassword: passVal,
+            baseDN: document.getElementById('ldap-basedn').value
+          })
+    });
+    const data = await res.json();
+    box.textContent = data.ok ? '✅ ' + (data.message || 'Успешно.') : '❌ ' + (data.error || 'Ошибка.');
+  } catch (e) {
+    box.textContent = '❌ Ошибка соединения с сервером NetMonitor.';
   }
 });
 

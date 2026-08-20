@@ -118,20 +118,23 @@ router.post('/event-webhook/test', requireAdmin, async (req, res) => {
 router.get('/dashboard/widgets', requireAuth, (req, res) => {
   const days = Math.min(30, Math.max(7, Number(req.query.days) || 14));
   const now = Date.now();
+  const site = req.query.site ? String(req.query.site) : null;
+  const siteClause = site ? 'AND d.site_id = ?' : '';
+  const siteParams = site ? [site] : [];
 
   const slaFor = (windowMs) => {
     const row = db.prepare(`
       SELECT AVG(h.online) as pct, COUNT(*) as cnt
       FROM history h JOIN devices d ON d.id = h.device_id
-      WHERE d.monitored = 1 AND h.ts >= ?
-    `).get(now - windowMs);
+      WHERE d.monitored = 1 AND h.ts >= ? ${siteClause}
+    `).get(now - windowMs, ...siteParams);
     return row.cnt ? Math.round(row.pct * 1000) / 10 : null;
   };
   const sla24h = slaFor(86400 * 1000);
   const sla7d  = slaFor(7 * 86400 * 1000);
 
   const { statusCache } = require('../services/scheduler');
-  const monitored = db.prepare('SELECT id FROM devices WHERE monitored=1').all();
+  const monitored = db.prepare(`SELECT id FROM devices d WHERE monitored=1 ${siteClause}`).all(...siteParams);
   let online = 0, offline = 0, unknown = 0;
   monitored.forEach(({ id }) => {
     const s = statusCache[id];
@@ -143,16 +146,19 @@ router.get('/dashboard/widgets', requireAuth, (req, res) => {
   let openIncidents = null;
   const features = require('../db').getFeatures();
   if (features.incidents) {
-    openIncidents = db.prepare("SELECT COUNT(*) as c FROM incidents WHERE end_ts IS NULL").get().c;
+    openIncidents = site
+      ? db.prepare(`SELECT COUNT(*) as c FROM incidents i JOIN devices d ON d.id=i.device_id WHERE i.end_ts IS NULL AND d.site_id=?`).get(site).c
+      : db.prepare("SELECT COUNT(*) as c FROM incidents WHERE end_ts IS NULL").get().c;
   }
 
   // Heat map: устройства под мониторингом, дневной аптайм за N дней
   const cutoff = now - days * 86400 * 1000;
-  const devices = db.prepare('SELECT id,name FROM devices WHERE monitored=1 ORDER BY name').all();
+  const devices = db.prepare(`SELECT id,name FROM devices d WHERE monitored=1 ${siteClause} ORDER BY name`).all(...siteParams);
+  const deviceIds = new Set(devices.map(d => d.id));
   const rows = db.prepare(`
     SELECT device_id, date(ts/1000,'unixepoch') as day, AVG(online) as pct
     FROM history WHERE ts >= ? GROUP BY device_id, day
-  `).all(cutoff);
+  `).all(cutoff).filter(r => !site || deviceIds.has(r.device_id));
   const byDevice = {};
   rows.forEach(r => { (byDevice[r.device_id] ||= {})[r.day] = Math.round(r.pct * 1000) / 10; });
 

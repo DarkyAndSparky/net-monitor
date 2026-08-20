@@ -2,8 +2,8 @@
 const express = require('express');
 const fs      = require('fs');
 const path    = require('path');
-const { db, newId, deviceRow, getSetting, setSetting, getFeatures, hashPassword } = require('../db');
-const { requireAuth, requireAdmin, logAudit } = require('../middleware/auth');
+const { db, newId, slugify, deviceRow, getSetting, setSetting, getFeatures, hashPassword } = require('../db');
+const { requireAuth, requireAdmin, requireOperator, logAudit } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -12,6 +12,63 @@ const BRANDING_DIR= path.join(DATA_DIR, 'branding');
 const LOGO_MIME   = { 'image/svg+xml':'svg', 'image/png':'png', 'image/jpeg':'jpg' };
 const LOGO_CT     = { svg:'image/svg+xml', png:'image/png', jpg:'image/jpeg' };
 const DEFAULT_INT = 60;
+
+// ── Категории устройств ──────────────────────────────────────────────
+// (перенесено сюда из devices.js: этот роутер монтируется на /api напрямую,
+// а devices.js — на /api/devices, где /categories был бы недостижим
+// как /api/categories, что и вызывал фронтенд)
+router.get('/categories', requireAuth, (req, res) =>
+  res.json(db.prepare('SELECT * FROM categories ORDER BY sort,name').all())
+);
+router.post('/categories', requireOperator, (req, res) => {
+  const { categories } = req.body || {};
+  if (!Array.isArray(categories) || !categories.length)
+    return res.status(400).json({ error: 'categories_required', message: 'Нужна хотя бы одна категория' });
+  const newIds = new Set();
+  for (const c of categories) {
+    if (!c.name?.trim()) return res.status(400).json({ error: 'invalid_category', message: 'У категории должно быть название' });
+    if (c.color && !/^#[0-9a-fA-F]{6}$/.test(c.color)) return res.status(400).json({ error: 'invalid_color' });
+    const id = c.id || slugify(c.name);
+    if (newIds.has(id)) return res.status(400).json({ error: 'duplicate_id' });
+    newIds.add(id);
+  }
+  const usedIds = new Set(db.prepare('SELECT DISTINCT category_id FROM devices').all().map(r => r.category_id));
+  const removedUsed = [...usedIds].filter(id => !newIds.has(id));
+  if (removedUsed.length) return res.status(400).json({ error: 'category_in_use', message: `Используется устройствами: ${removedUsed.join(', ')}` });
+  db.transaction(() => {
+    db.prepare('DELETE FROM categories').run();
+    categories.forEach((c, i) => db.prepare('INSERT INTO categories (id,name,color,sort) VALUES (?,?,?,?)').run(c.id||slugify(c.name), c.name.trim(), c.color||'#6b7280', i));
+  })();
+  logAudit(req, 'categories.update', `${categories.length} категорий`);
+  res.json(db.prepare('SELECT * FROM categories ORDER BY sort').all());
+});
+
+// ── Площадки (Multi-site) ────────────────────────────────────────────
+router.get('/sites', requireAuth, (req, res) =>
+  res.json(db.prepare('SELECT * FROM sites ORDER BY sort,name').all())
+);
+router.post('/sites', requireOperator, (req, res) => {
+  const { sites } = req.body || {};
+  if (!Array.isArray(sites))
+    return res.status(400).json({ error: 'sites_required', message: 'Ожидался список площадок' });
+  const newIds = new Set();
+  for (const s of sites) {
+    if (!s.name?.trim()) return res.status(400).json({ error: 'invalid_site', message: 'У площадки должно быть название' });
+    if (s.color && !/^#[0-9a-fA-F]{6}$/.test(s.color)) return res.status(400).json({ error: 'invalid_color' });
+    const id = s.id || slugify(s.name);
+    if (newIds.has(id)) return res.status(400).json({ error: 'duplicate_id' });
+    newIds.add(id);
+  }
+  const usedIds = new Set(db.prepare("SELECT DISTINCT site_id FROM devices WHERE site_id IS NOT NULL AND site_id!=''").all().map(r => r.site_id));
+  const removedUsed = [...usedIds].filter(id => !newIds.has(id));
+  if (removedUsed.length) return res.status(400).json({ error: 'site_in_use', message: `Площадка используется устройствами: ${removedUsed.join(', ')}` });
+  db.transaction(() => {
+    db.prepare('DELETE FROM sites').run();
+    sites.forEach((s, i) => db.prepare('INSERT INTO sites (id,name,color,address,sort) VALUES (?,?,?,?,?)').run(s.id||slugify(s.name), s.name.trim(), s.color||'#6b7280', s.address||'', i));
+  })();
+  logAudit(req, 'sites.update', `${sites.length} площадок`);
+  res.json(db.prepare('SELECT * FROM sites ORDER BY sort').all());
+});
 
 // ── Брендинг ──────────────────────────────────────────────────────────
 router.get('/branding', (req, res) => {
@@ -113,6 +170,47 @@ router.post('/backup/restore', requireAdmin, (req, res) => {
     logAudit(req,'backup.restore',`exportedAt=${b.exportedAt||'?'}`);
     res.json({ok:true});
   } catch(err) { res.status(500).json({error:'restore_failed',message:err.message}); }
+});
+
+// ══════════════════════════════════════════════════════════════════════
+//  LDAP/AD-АУТЕНТИФИКАЦИЯ
+// ══════════════════════════════════════════════════════════════════════
+router.get('/ldap', requireAdmin, (req, res) => {
+  const cfg = getSetting('ldap') || {};
+  res.json({ ...cfg, bindPassword: cfg.bindPassword ? '••••••••' : '' });
+});
+
+router.post('/ldap', requireAdmin, (req, res) => {
+  const inc = req.body || {}, prev = getSetting('ldap') || {};
+  const cfg = {
+    enabled: !!inc.enabled,
+    url: inc.url ?? prev.url ?? '',
+    bindDN: inc.bindDN ?? prev.bindDN ?? '',
+    bindPassword: (inc.bindPassword && inc.bindPassword !== '••••••••') ? inc.bindPassword : (prev.bindPassword || ''),
+    baseDN: inc.baseDN ?? prev.baseDN ?? '',
+    userFilter: inc.userFilter ?? prev.userFilter ?? '(sAMAccountName={{username}})',
+    defaultRole: ['admin', 'operator', 'viewer'].includes(inc.defaultRole) ? inc.defaultRole : (prev.defaultRole || 'viewer'),
+    roleMapping: Array.isArray(inc.roleMapping)
+      ? inc.roleMapping.filter(r => r?.group && ['admin', 'operator', 'viewer'].includes(r.role)).map(r => ({ group: String(r.group), role: r.role }))
+      : (prev.roleMapping || []),
+    rejectUnauthorized: inc.rejectUnauthorized ?? prev.rejectUnauthorized ?? true
+  };
+  setSetting('ldap', cfg);
+  logAudit(req, 'ldap.update', '');
+  res.json({ ok: true });
+});
+
+router.post('/ldap/test', requireAdmin, async (req, res) => {
+  const cfg = req.body?.useSaved ? (getSetting('ldap') || {}) : req.body;
+  if (req.body?.useSaved) {
+    const saved = getSetting('ldap') || {};
+    if (!saved.bindPassword) return res.status(400).json({ ok: false, error: 'Пароль сервисной учётной записи не сохранён' });
+  } else if (cfg.bindPassword === '••••••••') {
+    cfg.bindPassword = (getSetting('ldap') || {}).bindPassword || '';
+  }
+  const { testConnection } = require('../services/ldap');
+  const result = await testConnection(cfg);
+  res.json(result);
 });
 
 module.exports = router;
