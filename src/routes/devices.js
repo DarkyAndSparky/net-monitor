@@ -156,3 +156,4 @@ router.get('/uptime.csv', requireAuth, (req, res) => {
 });
 
 module.exports = router;
+module.exports.parseCsvLine = parseCsvLine;

@@ -266,6 +266,21 @@ function printBanner(useHttps, httpsPort, httpPort, localIP) {
   setTimeout(() => process.stdout.write(lines + '\n'), 50);
 }
 
+// ── Автооткрытие браузера (по образцу рабочего паттерна из другого проекта:
+// сервер сам открывает браузер ровно в момент готовности listen(), без
+// внешнего поллинга/угадывания через curl или VBScript) ────────────────
+function openBrowser(url) {
+  if (process.env.NETMONITOR_OPEN_BROWSER !== '1') return;
+  const { exec } = require('child_process');
+  const platform = process.platform;
+  const cmd = platform === 'win32' ? `start "" "${url}"`
+    : platform === 'darwin' ? `open "${url}"`
+    : `xdg-open "${url}"`;
+  exec(cmd, (err) => {
+    if (err) log.debug({ err }, 'Не удалось автоматически открыть браузер');
+  });
+}
+
 // ── Запуск ────────────────────────────────────────────────────────────
 const localIP = getLocalIP();
 
@@ -287,15 +302,18 @@ if (USE_HTTPS) {
       redir.listen(REDIRECT_PORT, () => {
         printBanner(true, HTTPS_PORT, REDIRECT_PORT, localIP);
         log.info({ httpsPort: HTTPS_PORT, httpPort: REDIRECT_PORT }, 'NetMonitor запущен (HTTPS)');
+        openBrowser(`https://localhost:${HTTPS_PORT}`);
       });
     } else {
       printBanner(true, HTTPS_PORT, 0, localIP);
       log.info({ httpsPort: HTTPS_PORT }, 'NetMonitor запущен (HTTPS, без редиректа)');
+      openBrowser(`https://localhost:${HTTPS_PORT}`);
     }
   });
 } else {
   app.listen(REDIRECT_PORT, () => {
     printBanner(false, 0, REDIRECT_PORT, localIP);
     log.info({ port: REDIRECT_PORT }, 'NetMonitor запущен (HTTP)');
+    openBrowser(`http://localhost:${REDIRECT_PORT}`);
   });
 }

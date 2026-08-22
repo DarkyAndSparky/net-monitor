@@ -12,9 +12,11 @@ const fs     = require('fs');
 const crypto = require('crypto');
 
 const DATA_DIR = path.join(__dirname, '../../data');
-const DB_PATH  = path.join(DATA_DIR, 'netmonitor.db');
+const DB_PATH  = process.env.NETMONITOR_DB_PATH || path.join(DATA_DIR, 'netmonitor.db');
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+const DB_DIR = path.dirname(DB_PATH);
+if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
 
 const db = new DatabaseSync(DB_PATH);
 

@@ -29,6 +29,7 @@
   --badge-unknown-bg:var(--panel-2);   --badge-unknown-text:var(--text-dim);
   /* SVG-карта */
   --map-edge:#4a4a46;
+  --map-edge-weak:#232c3d;
   --map-label:#a09e99;
   --map-bg:#1c1c1a;
 }
@@ -58,6 +59,7 @@ body.theme-light{
   --badge-unknown-bg:var(--panel-2);   --badge-unknown-text:var(--text-dim);
   /* SVG-карта светлая */
   --map-edge:#c8c5bc;
+  --map-edge-weak:#e4e2dc;
   --map-label:#6b6a65;
   --map-bg:#ffffff;
 }

@@ -1,5 +1,5 @@
 @echo off
-chcp 65001 >nul
+chcp 65001 >nul 2>&1
 REM Установка net-monitor агента как задачи Планировщика Windows
 REM
 REM Использование:

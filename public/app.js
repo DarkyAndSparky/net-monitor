@@ -73,11 +73,10 @@ function showForcedPasswordChange(username) {
   document.getElementById('login-overlay').classList.add('hidden');
   document.getElementById('app-root').classList.add('hidden');
   document.getElementById('forced-pwchange-overlay').classList.remove('hidden');
-  document.getElementById('fpw-current').value = '';
   document.getElementById('fpw-new').value = '';
   document.getElementById('fpw-confirm').value = '';
   document.getElementById('forced-pwchange-error').classList.add('hidden');
-  setTimeout(() => document.getElementById('fpw-current').focus(), 50);
+  setTimeout(() => document.getElementById('fpw-new').focus(), 50);
   _forcedPwUsername = username;
 }
 
@@ -88,7 +87,6 @@ document.getElementById('forced-pwchange-form').addEventListener('submit', async
   const errBox = document.getElementById('forced-pwchange-error');
   errBox.classList.add('hidden');
 
-  const currentPassword = document.getElementById('fpw-current').value;
   const newPassword = document.getElementById('fpw-new').value;
   const confirm = document.getElementById('fpw-confirm').value;
 
@@ -102,18 +100,13 @@ document.getElementById('forced-pwchange-form').addEventListener('submit', async
     errBox.classList.remove('hidden');
     return;
   }
-  if (newPassword === currentPassword) {
-    errBox.textContent = 'Новый пароль должен отличаться от текущего';
-    errBox.classList.remove('hidden');
-    return;
-  }
 
   const btn = e.target.querySelector('button[type="submit"]');
   const restore = btnLoading(btn);
   try {
     const res = await fetch('/api/change-password', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ currentPassword, newPassword }),
+      body: JSON.stringify({ newPassword }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -297,9 +290,9 @@ function updateMapNode(deviceId) {
   const s = STATUS[deviceId];
   if (!s) return;
 
-  let ringColor = '#4b5568';
+  let ringColor = 'var(--map-edge)';
   if (d.monitored && s) {
-    ringColor = s.online === true ? '#22c55e' : s.online === false ? '#ef4444' : '#4b5568';
+    ringColor = s.online === true ? 'var(--green)' : s.online === false ? 'var(--red)' : 'var(--map-edge)';
   }
 
   const circle = node.querySelector('circle[r="16"]');
@@ -704,6 +697,19 @@ function esc(s) {
   return (s || '').toString().replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
 
+// Индикатор загрузки на кнопке: добавляет класс .loading (спиннер уже есть в CSS
+// через ::before) и блокирует повторный клик. Возвращает restore() для отмены.
+function btnLoading(btn) {
+  if (!btn) return () => {};
+  const wasDisabled = btn.disabled;
+  btn.classList.add('loading');
+  btn.disabled = true;
+  return () => {
+    btn.classList.remove('loading');
+    btn.disabled = wasDisabled;
+  };
+}
+
 // ---------------- MAP (SVG) ----------------
 // ---------------- КАРТА: состояние ----------------
 let MAP_VIEW = { x: 0, y: 0, w: 1000, h: 650 }; // текущий viewBox (зум/пан)
@@ -941,7 +947,7 @@ function renderMap() {
     edgesHtml += `<g class="map-edge" data-edge-id="${id}">
       <line x1="${pa.x}" y1="${pa.y}" x2="${pb.x}" y2="${pb.y}" stroke="${opts.color}" stroke-width="${opts.width}" ${opts.dash ? `stroke-dasharray="${opts.dash}"` : ''} />
       <line x1="${pa.x}" y1="${pa.y}" x2="${pb.x}" y2="${pb.y}" stroke="transparent" stroke-width="14" class="edge-hit" style="cursor:${LINK_EDIT_MODE ? 'pointer' : 'default'}" />
-      ${opts.label ? `<text x="${mx}" y="${my - 4}" text-anchor="middle" font-size="9" fill="${opts.labelColor || '#5b6a85'}">${esc(opts.label)}</text>` : ''}
+      ${opts.label ? `<text x="${mx}" y="${my - 4}" text-anchor="middle" font-size="9" fill="${opts.labelColor || 'var(--map-label)'}">${esc(opts.label)}</text>` : ''}
     </g>`;
   };
 
@@ -954,24 +960,24 @@ function renderMap() {
       if (!a || !b) return;
       const edge = (TOPOLOGY.edges || []).find(e => e.from === parentId && e.to === childId);
       drawEdge(a, b, edge && edge.manual
-        ? { color: '#60a5fa', width: 2, label: edge.label }
-        : { color: '#3b5170', width: 1.5, label: edge ? edge.interface : '' });
+        ? { color: 'var(--accent)', width: 2, label: edge.label }
+        : { color: 'var(--map-edge)', width: 1.5, label: edge ? edge.interface : '' });
       drawnAsTree.add(parentId + '>' + childId);
     });
     (TOPOLOGY.edges || []).forEach(e => {
       if (drawnAsTree.has(e.from + '>' + e.to)) return;
       const a = byId(e.from), b = byId(e.to);
       if (!a || !b) return;
-      drawEdge(a, b, { color: '#4b5568', width: 1, dash: '2,3', label: e.label || e.interface });
+      drawEdge(a, b, { color: 'var(--map-edge-weak)', width: 1, dash: '2,3', label: e.label || e.interface });
     });
   } else if (TOPOLOGY.edges && TOPOLOGY.edges.length) {
     TOPOLOGY.edges.forEach(e => {
       const a = byId(e.from), b = byId(e.to);
       if (!a || !b) return;
       if (e.manual) {
-        drawEdge(a, b, { id: e.id, color: '#60a5fa', width: 2, label: e.label, labelColor: '#93c5fd' });
+        drawEdge(a, b, { id: e.id, color: 'var(--accent)', width: 2, label: e.label, labelColor: 'var(--accent)' });
       } else {
-        drawEdge(a, b, { id: e.id, color: '#3b5170', width: 1.5, label: e.interface, labelColor: '#5b6a85' });
+        drawEdge(a, b, { id: e.id, color: 'var(--map-edge)', width: 1.5, label: e.interface, labelColor: 'var(--map-label)' });
       }
     });
     const connected = new Set(TOPOLOGY.edges.flatMap(e => [e.from, e.to]));
@@ -979,7 +985,7 @@ function renderMap() {
     if (core) {
       list.forEach(d => {
         if (d.id === core.id || connected.has(d.id)) return;
-        drawEdge(core, d, { color: '#232c3d', width: 1, dash: '2,3' });
+        drawEdge(core, d, { color: 'var(--map-edge-weak)', width: 1, dash: '2,3' });
       });
     }
   } else {
@@ -987,7 +993,7 @@ function renderMap() {
     if (core) {
       list.forEach(d => {
         if (d.id === core.id) return;
-        drawEdge(core, d, { color: '#2a3348', width: 1.5 });
+        drawEdge(core, d, { color: 'var(--map-edge-weak)', width: 1.5 });
       });
     }
   }
@@ -996,20 +1002,20 @@ function renderMap() {
   list.forEach(d => {
     const c = catById(d.category);
     const s = STATUS[d.id];
-    let ringColor = '#4b5568';
+    let ringColor = 'var(--map-edge)';
     if (d.monitored && s) {
-      ringColor = s.online === true ? '#22c55e' : s.online === false ? '#ef4444' : '#4b5568';
+      ringColor = s.online === true ? 'var(--green)' : s.online === false ? 'var(--red)' : 'var(--map-edge)';
     }
     const selected = LINK_EDIT_MODE && LINK_EDIT_FIRST === d.id;
     const found = SEARCH_MATCH_ID === d.id;
     const pos = getNodePos(d);
     const draggable = !TREE_VIEW; // в режиме дерева позиции считаются автоматически, тащить нечего
     nodesHtml += `<g class="map-node" data-id="${d.id}" transform="translate(${pos.x},${pos.y})" style="cursor:${LINK_EDIT_MODE ? 'pointer' : (draggable ? 'grab' : 'default')}">
-      ${found ? `<circle r="26" fill="none" stroke="#facc15" stroke-width="2" opacity="0.7"><animate attributeName="r" values="20;30;20" dur="1.4s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.8;0.1;0.8" dur="1.4s" repeatCount="indefinite"/></circle>` : ''}
-      <circle r="16" fill="${esc(c.color)}" stroke="${selected ? '#facc15' : (found ? '#facc15' : ringColor)}" stroke-width="${selected || found ? 4 : 3}" ${!d.monitored ? 'stroke-dasharray="3,2"' : ''}/>
+      ${found ? `<circle r="26" fill="none" stroke="var(--yellow)" stroke-width="2" opacity="0.7"><animate attributeName="r" values="20;30;20" dur="1.4s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.8;0.1;0.8" dur="1.4s" repeatCount="indefinite"/></circle>` : ''}
+      <circle r="16" fill="${esc(c.color)}" stroke="${selected ? 'var(--yellow)' : (found ? 'var(--yellow)' : ringColor)}" stroke-width="${selected || found ? 4 : 3}" ${!d.monitored ? 'stroke-dasharray="3,2"' : ''}/>
       <text y="4" text-anchor="middle" font-size="13" fill="white" font-weight="700">${iconFor(d)}</text>
-      <text y="32" text-anchor="middle" font-size="11" fill="#e6e9f0" font-weight="600">${esc(d.name)}</text>
-      <text y="46" text-anchor="middle" font-size="10" fill="#8b95ab">${esc(d.ip)}</text>
+      <text y="32" text-anchor="middle" font-size="11" fill="var(--text)" font-weight="600">${esc(d.name)}</text>
+      <text y="46" text-anchor="middle" font-size="10" fill="var(--text-dim)">${esc(d.ip)}</text>
     </g>`;
   });
 
@@ -3754,8 +3760,8 @@ function renderDDChart(history, range) {
     return;
   }
 
-  const green  = '#22c55e';
-  const red    = '#ef4444';
+  const green  = getComputedStyle(document.body).getPropertyValue('--green').trim() || '#22c55e';
+  const red    = getComputedStyle(document.body).getPropertyValue('--red').trim()   || '#ef4444';
   const barW   = Math.max(2, Math.floor(W / pts.length) - 1);
   const barGap = Math.max(1, Math.floor(W / pts.length));
 

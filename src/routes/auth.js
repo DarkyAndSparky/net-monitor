@@ -25,6 +25,9 @@ router.post('/login', async (req, res) => {
     return res.status(429).json({ error: 'too_many_attempts', message: `Повторите через ~${wait} мин.` });
   }
   const { username, password } = req.body || {};
+  if (!username || typeof username !== 'string') {
+    registerFail(ip); return res.status(401).json({ error: 'invalid_credentials' });
+  }
   let user = db.prepare('SELECT * FROM users WHERE username=?').get(username);
 
   // Локальный пользователь — обычная проверка пароля (без изменений в поведении)
@@ -77,10 +80,18 @@ router.post('/change-password', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'ldap_managed', message: 'Пароль этой учётной записи управляется через LDAP/AD — смените его там.' });
   if (!newPassword || newPassword.length < MIN_PASSWORD_LENGTH)
     return res.status(400).json({ error: 'weak_password', message: `Пароль должен быть не короче ${MIN_PASSWORD_LENGTH} символов` });
-  if (newPassword === currentPassword)
-    return res.status(400).json({ error: 'same_password', message: 'Новый пароль должен отличаться от текущего' });
-  if (!verifyPassword(currentPassword || '', user.salt, user.hash))
-    return res.status(401).json({ error: 'wrong_current_password' });
+  // Принудительная смена пароля по умолчанию при первом входе: пользователь только что
+  // ввёл текущий пароль на экране логина несколько секунд назад — сама валидная сессия
+  // это доказывает, повторный ввод не требуем. Для добровольной смены через настройки
+  // (must_change_password уже снят) текущий пароль по-прежнему обязателен.
+  if (!user.must_change_password) {
+    if (newPassword === currentPassword)
+      return res.status(400).json({ error: 'same_password', message: 'Новый пароль должен отличаться от текущего' });
+    if (!verifyPassword(currentPassword || '', user.salt, user.hash))
+      return res.status(401).json({ error: 'wrong_current_password' });
+  } else if (verifyPassword(newPassword, user.salt, user.hash)) {
+    return res.status(400).json({ error: 'same_password', message: 'Новый пароль должен отличаться от текущего (по умолчанию)' });
+  }
   const { salt, hash } = hashPassword(newPassword);
   db.prepare('UPDATE users SET salt=?,hash=?,must_change_password=0 WHERE username=?').run(salt, hash, user.username);
   logAudit(req, 'user.change_password', user.username);

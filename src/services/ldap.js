@@ -115,4 +115,4 @@ async function testConnection(cfg) {
   }
 }
 
-module.exports = { authenticate, testConnection };
+module.exports = { authenticate, testConnection, escapeFilterValue, roleFromGroups };
