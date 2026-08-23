@@ -2,6 +2,7 @@
 const express = require('express');
 const { db, hashPassword, verifyPassword, getSetting } = require('../db');
 const { requireAuth, requireAdmin, logAudit } = require('../middleware/auth');
+const log = require('../services/logger');
 
 const router = express.Router();
 const MIN_PASSWORD_LENGTH = 8;
@@ -19,48 +20,53 @@ function registerFail(ip) {
 function normalizeRole(role) { return VALID_ROLES.includes(role) ? role : 'viewer'; }
 
 router.post('/login', async (req, res) => {
-  const ip = req.ip;
-  if (isLockedOut(ip)) {
-    const wait = Math.ceil((loginAttempts[ip].lockedUntil - Date.now()) / 60000);
-    return res.status(429).json({ error: 'too_many_attempts', message: `Повторите через ~${wait} мин.` });
-  }
-  const { username, password } = req.body || {};
-  if (!username || typeof username !== 'string') {
-    registerFail(ip); return res.status(401).json({ error: 'invalid_credentials' });
-  }
-  let user = db.prepare('SELECT * FROM users WHERE username=?').get(username);
+  try {
+    const ip = req.ip;
+    if (isLockedOut(ip)) {
+      const wait = Math.ceil((loginAttempts[ip].lockedUntil - Date.now()) / 60000);
+      return res.status(429).json({ error: 'too_many_attempts', message: `Повторите через ~${wait} мин.` });
+    }
+    const { username, password } = req.body || {};
+    if (!username || typeof username !== 'string') {
+      registerFail(ip); return res.status(401).json({ error: 'invalid_credentials' });
+    }
+    let user = db.prepare('SELECT * FROM users WHERE username=?').get(username);
 
-  // Локальный пользователь — обычная проверка пароля (без изменений в поведении)
-  if (user && user.source !== 'ldap') {
-    if (!verifyPassword(password || '', user.salt, user.hash)) {
-      registerFail(ip); return res.status(401).json({ error: 'invalid_credentials' });
-    }
-  } else {
-    // Нет локального пользователя (или он привязан к LDAP) — пробуем LDAP, если он включён
-    const ldapCfg = getSetting('ldap') || {};
-    if (!ldapCfg.enabled) {
-      registerFail(ip); return res.status(401).json({ error: 'invalid_credentials' });
-    }
-    const { authenticate } = require('../services/ldap');
-    const result = await authenticate(username, password || '', ldapCfg);
-    if (!result.ok) {
-      registerFail(ip); return res.status(401).json({ error: 'invalid_credentials' });
-    }
-    // Авто-провижининг / синхронизация роли по группам при каждом успешном входе
-    const role = normalizeRole(result.role);
-    if (user) {
-      db.prepare('UPDATE users SET role=? WHERE username=?').run(role, username);
+    // Локальный пользователь — обычная проверка пароля (без изменений в поведении)
+    if (user && user.source !== 'ldap') {
+      if (!verifyPassword(password || '', user.salt, user.hash)) {
+        registerFail(ip); return res.status(401).json({ error: 'invalid_credentials' });
+      }
     } else {
-      db.prepare('INSERT INTO users (username,salt,hash,role,must_change_password,source) VALUES (?,?,?,?,0,?)')
-        .run(username, '', '', role, 'ldap');
+      // Нет локального пользователя (или он привязан к LDAP) — пробуем LDAP, если он включён
+      const ldapCfg = getSetting('ldap') || {};
+      if (!ldapCfg.enabled) {
+        registerFail(ip); return res.status(401).json({ error: 'invalid_credentials' });
+      }
+      const { authenticate } = require('../services/ldap');
+      const result = await authenticate(username, password || '', ldapCfg);
+      if (!result.ok) {
+        registerFail(ip); return res.status(401).json({ error: 'invalid_credentials' });
+      }
+      // Авто-провижининг / синхронизация роли по группам при каждом успешном входе
+      const role = normalizeRole(result.role);
+      if (user) {
+        db.prepare('UPDATE users SET role=? WHERE username=?').run(role, username);
+      } else {
+        db.prepare('INSERT INTO users (username,salt,hash,role,must_change_password,source) VALUES (?,?,?,?,0,?)')
+          .run(username, '', '', role, 'ldap');
+      }
+      user = db.prepare('SELECT * FROM users WHERE username=?').get(username);
     }
-    user = db.prepare('SELECT * FROM users WHERE username=?').get(username);
-  }
 
-  delete loginAttempts[ip];
-  req.session.userId = user.username;
-  req.session.role   = user.role || 'admin';
-  res.json({ ok: true, username: user.username, role: user.role, mustChangePassword: !!user.must_change_password });
+    delete loginAttempts[ip];
+    req.session.userId = user.username;
+    req.session.role   = user.role || 'admin';
+    res.json({ ok: true, username: user.username, role: user.role, mustChangePassword: !!user.must_change_password });
+  } catch (err) {
+    log.error({ err }, 'Login handler failed unexpectedly');
+    res.status(500).json({ error: 'internal_error' });
+  }
 });
 
 router.post('/logout', (req, res) => req.session.destroy(() => res.json({ ok: true })));

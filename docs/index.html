@@ -107,7 +107,7 @@
 <nav class="sidebar">
   <div class="sidebar-logo">
     <div class="project">📡 net-monitor</div>
-    <div class="version">v0.9.0-beta</div>
+    <div class="version">v26w34-b01</div>
     <div class="badge">Developer &amp; Admin Documentation</div>
   </div>
 
@@ -119,6 +119,9 @@
     <div class="nav-item" onclick="show('config')"><span class="icon">🔧</span>Настройка</div>
     <div class="nav-item" onclick="show('backup')"><span class="icon">💾</span>Бэкап и восстановление</div>
     <div class="nav-item" onclick="show('roles')"><span class="icon">👥</span>Роли и права доступа</div>
+    <div class="nav-item" onclick="show('ldap')"><span class="icon">🔐</span>LDAP / Active Directory</div>
+    <div class="nav-item" onclick="show('sites')"><span class="icon">🏢</span>Площадки (Multi-site)</div>
+    <div class="nav-item" onclick="show('logs-viewer')"><span class="icon">📋</span>Просмотр логов</div>
     <div class="nav-item" onclick="show('rate-limiting')"><span class="icon">🚦</span>Rate Limiting</div>
     <div class="nav-item" onclick="show('integrations')"><span class="icon">🔌</span>Интеграции</div>
     <div class="nav-item" onclick="show('alerts')"><span class="icon">🔔</span>Алерты и уведомления</div>
@@ -145,6 +148,10 @@
     <div class="nav-item" onclick="show('api-topology')"><span class="icon">🗺</span>Topology</div>
     <div class="nav-item" onclick="show('api-integrations')"><span class="icon">🔌</span>Integrations</div>
     <div class="nav-item" onclick="show('api-settings')"><span class="icon">⚙️</span>Settings</div>
+    <div class="nav-item" onclick="show('api-ldap')"><span class="icon">🔐</span>LDAP</div>
+    <div class="nav-item" onclick="show('api-sites')"><span class="icon">🏢</span>Sites</div>
+    <div class="nav-item" onclick="show('api-logs')"><span class="icon">📋</span>Logs</div>
+    <div class="nav-item" onclick="show('api-event-webhook')"><span class="icon">🪝</span>Event Webhook</div>
     <div class="nav-item" onclick="show('api-maintenance')"><span class="icon">🔧</span>Maintenance</div>
     <div class="nav-item" onclick="show('api-traffic')"><span class="icon">📶</span>Traffic</div>
     <div class="nav-item" onclick="show('api-agent')"><span class="icon">🖥</span>Agent</div>
@@ -155,14 +162,14 @@
 
 <!-- ADMIN OVERVIEW -->
 <section id="admin-overview" class="section active">
-  <div class="top-bar"><div class="breadcrumb">Docs / <span>Обзор системы</span></div><div class="doc-meta"><strong>v</strong> 0.9.0-beta</div></div>
+  <div class="top-bar"><div class="breadcrumb">Docs / <span>Обзор системы</span></div><div class="doc-meta"><strong>v</strong> 26w34-b01</div></div>
   <h1>net-monitor</h1>
   <p class="subtitle">Self-hosted система мониторинга локальной сети — устройства, карта, пинг, SNMP, MikroTik, алерты.</p>
 
   <div class="cards-grid">
     <div class="stat-card"><div class="label">Хранилище данных</div><div class="value" style="color:var(--accent)">SQLite</div></div>
     <div class="stat-card"><div class="label">Порт по умолчанию</div><div class="value" style="color:var(--green)">9222</div></div>
-    <div class="stat-card"><div class="label">Node.js</div><div class="value" style="color:var(--yellow)">≥ 18.0</div></div>
+    <div class="stat-card"><div class="label">Node.js</div><div class="value" style="color:var(--yellow)">≥ 22.5</div></div>
     <div class="stat-card"><div class="label">Лицензия</div><div class="value" style="color:var(--muted);font-size:16px">MIT</div></div>
   </div>
 
@@ -170,28 +177,33 @@
   <table>
     <tr><th>Модуль</th><th>Описание</th></tr>
     <tr><td>Реестр устройств</td><td>Добавление, редактирование, категории, теги, CSV-импорт/экспорт, массовые операции</td></tr>
+    <tr><td>Площадки (Multi-site)</td><td>Привязка устройств к филиалам, фильтр дешборда по площадке</td></tr>
     <tr><td>Карта сети</td><td>SVG-карта с перетаскиванием, деревом, подсетями, автотопологией</td></tr>
     <tr><td>Мониторинг (Ping)</td><td>Проверка доступности с настраиваемым интервалом, история, sparkline, аптайм</td></tr>
     <tr><td>SNMP (опц.)</td><td>Опрос OID, аптайм, CPU MikroTik, расширяемо</td></tr>
     <tr><td>TCP port checks (опц.)</td><td>Проверка доступности портов сервисов</td></tr>
-    <tr><td>Алерты</td><td>Telegram Bot, Webhook, эскалация, инциденты</td></tr>
+    <tr><td>Дешборд v2</td><td>SLA-индикаторы (24ч/7д), heat map аптайма по дням, сводка по статусам</td></tr>
+    <tr><td>Алерты</td><td>Telegram Bot, Webhook, Ntfy.sh, Email (SMTP), эскалация, инциденты</td></tr>
+    <tr><td>Webhook на любое событие</td><td>Весь аудит-лог целиком (не только алерты), фильтр по типам событий, подпись секретом</td></tr>
     <tr><td>Интеграции</td><td>MikroTik RouterOS API, UniFi Controller, Cisco SSH</td></tr>
-    <tr><td>Обнаружение сети</td><td>Ping sweep, ARP через MikroTik, MNDP-соседи, автотопология</td></tr>
+    <tr><td>Обнаружение сети</td><td>Ping sweep, ARP через MikroTik, MNDP-соседи, LLDP/CDP по SNMP (любой вендор), автотопология</td></tr>
+    <tr><td>LDAP / Active Directory</td><td>Вход через AD как дополнение к локальным аккаунтам, авто-провижининг, роли по группам</td></tr>
     <tr><td>SSE</td><td>Живые обновления карты и статусов без перезагрузки страницы</td></tr>
     <tr><td>Prometheus /metrics</td><td>Экспортёр для Grafana, Alertmanager</td></tr>
     <tr><td>Роли</td><td>admin / operator / viewer с гранулярными правами</td></tr>
-    <tr><td>Аудит-лог (опц.)</td><td>Журнал всех действий с пагинацией и CSV-экспортом</td></tr>
+    <tr><td>Аудит-лог (опц.)</td><td>Журнал всех действий с поиском, фильтрами и CSV-экспортом</td></tr>
+    <tr><td>Системные логи</td><td>Просмотр в UI: фильтр по уровню/дате/тексту, живой tail в реальном времени, скачивание</td></tr>
     <tr><td>Брендинг</td><td>Название приложения, цвет акцента, логотип, тёмная/светлая тема</td></tr>
   </table>
 
   <h2>Требования</h2>
   <table>
     <tr><th>Компонент</th><th>Версия</th><th>Примечание</th></tr>
-    <tr><td>Node.js</td><td>≥ 18.0.0</td><td>Рекомендуется LTS</td></tr>
-    <tr><td>npm</td><td>≥ 8</td><td>Идёт вместе с Node.js</td></tr>
+    <tr><td>Node.js</td><td>≥ 22.5.0</td><td>Обязательно для встроенного <code>node:sqlite</code>. Используйте активную LTS-линию (22.x или 24.x)</td></tr>
+    <tr><td>npm</td><td>≥ 10</td><td>Идёт вместе с Node.js 22+</td></tr>
     <tr><td>ping</td><td>системный</td><td>На Windows встроен, на Linux пакет <code>iputils-ping</code></td></tr>
-    <tr><td>Дисковое место</td><td>~50 MB</td><td>+ данные: ~1 MB на 100 устройств за 30 дней</td></tr>
-    <tr><td>ОЗУ</td><td>~50–80 MB</td><td>RSS Node.js процесса в покое</td></tr>
+    <tr><td>Дисковое место</td><td>~80 MB</td><td>+ данные: ~1 MB на 100 устройств за 30 дней</td></tr>
+    <tr><td>ОЗУ</td><td>~60–100 MB</td><td>RSS Node.js процесса в покое</td></tr>
     <tr><td>ОС</td><td>Windows / Linux / macOS</td><td>Docker-образ на Alpine Linux</td></tr>
   </table>
 </section>
@@ -381,7 +393,64 @@ sqlite3 data/netmonitor.db ".backup data/netmonitor-backup.db"</pre>
 
   <h2>Управление пользователями</h2>
   <p>Настройки → Пользователи. Создание, смена роли, удаление. Нельзя удалить последнего администратора и нельзя удалить самого себя.</p>
-  <div class="alert success"><strong>Пароль по умолчанию:</strong> <code>admin / admin0000</code>. Смена пароля <strong>принудительна</strong> — сразу после первого входа система покажет экран смены пароля и заблокирует весь остальной интерфейс до его прохождения (защита от «забыл сменить»). Это же правило действует для любого нового пользователя, созданного администратором.</div>
+  <div class="alert success"><strong>Пароль по умолчанию:</strong> <code>admin / admin0000</code>. Смена пароля <strong>принудительна</strong> — сразу после первого входа система покажет экран смены пароля и заблокирует весь остальной интерфейс до его прохождения (защита от «забыл сменить»). Текущий пароль повторно вводить не нужно — валидная сессия уже подтверждает, что он известен. Это же правило действует для любого нового пользователя, созданного администратором.</div>
+</section>
+
+<!-- LDAP -->
+<section id="ldap" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / <span>LDAP / Active Directory</span></div></div>
+  <h1>LDAP / Active Directory</h1>
+  <p class="subtitle">Вход через AD как дополнение к локальным учётным записям, не замена. Настройки → LDAP/AD.</p>
+
+  <h2>Как работает</h2>
+  <ol>
+    <li>Если введённый логин уже существует локально — используется обычная проверка локального пароля, LDAP не задействуется вообще.</li>
+    <li>Если логина нет локально и LDAP включён — сервис-аккаунт (Bind DN) ищет пользователя в каталоге по <code>userFilter</code>, затем сервер пытается bind под найденным DN с введённым паролем — это и есть проверка пароля.</li>
+    <li>При успехе роль определяется по группам (<code>memberOf</code>) через настраиваемые правила «группа → роль», проверяемые сверху вниз. Если ни одна группа не совпала — применяется роль по умолчанию.</li>
+    <li>Учётная запись создаётся в NetMonitor автоматически (авто-провижининг), роль синхронизируется по группам при каждом следующем входе.</li>
+  </ol>
+
+  <h2>Настройка</h2>
+  <table>
+    <tr><th>Поле</th><th>Описание</th></tr>
+    <tr><td>URL сервера</td><td><code>ldap://host:389</code> или <code>ldaps://host:636</code></td></tr>
+    <tr><td>Bind DN / пароль</td><td>Сервисная учётная запись, только для поиска — создайте отдельную в AD специально для NetMonitor</td></tr>
+    <tr><td>Base DN</td><td>Где искать пользователей, например <code>OU=Users,DC=example,DC=local</code></td></tr>
+    <tr><td>Фильтр поиска</td><td>По умолчанию <code>(sAMAccountName={{username}})</code></td></tr>
+    <tr><td>Роли по группам</td><td>Список правил «DN группы → роль», первое совпадение побеждает</td></tr>
+  </table>
+
+  <div class="alert warning"><strong>⚠</strong> Пароль LDAP-пользователей нигде не сохраняется в NetMonitor — проверка идёт только через bind к самому LDAP-серверу при каждом входе. Локальную смену пароля (Настройки → Профиль) для LDAP-аккаунтов система не позволит — пароль меняется только в AD.</div>
+</section>
+
+<!-- SITES -->
+<section id="sites" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / <span>Площадки (Multi-site)</span></div></div>
+  <h1>Площадки (Multi-site)</h1>
+  <p class="subtitle">Для компаний с несколькими удалёнными филиалами/объектами под одним NetMonitor. Настройки → Площадки.</p>
+
+  <h2>Как устроено</h2>
+  <p>Площадка — название, цвет, адрес/комментарий. У каждого устройства есть необязательное поле «Площадка» (вкладка «Дополнительно» в форме устройства). На дешборде — переключатель «Все площадки / конкретная», фильтрующий карточки категорий, ключевые устройства, SLA-виджеты и heat map.</p>
+
+  <h2>Ограничения</h2>
+  <p>Площадку, на которую ссылается хотя бы одно устройство, удалить нельзя — сначала перепривяжите или удалите устройства.</p>
+</section>
+
+<!-- LOGS VIEWER -->
+<section id="logs-viewer" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / <span>Просмотр логов</span></div></div>
+  <h1>Просмотр системных логов</h1>
+  <p class="subtitle">Настройки → Логи (только для admin). Логи пишет <code>pino</code>, ротация ежедневная, хранится 7 файлов.</p>
+
+  <h2>Возможности</h2>
+  <ul>
+    <li>Фильтр по уровню (TRACE…FATAL), дате (текущий или любой из 7 архивных файлов) и свободному текстовому поиску</li>
+    <li><strong>Live-tail</strong> — просмотр в реальном времени через SSE, как <code>docker logs -f</code>. Доступен только для текущего активного файла</li>
+    <li>Скачивание файла целиком (raw) и удаление архивных файлов (текущий активный удалить нельзя)</li>
+  </ul>
+
+  <h2>Уровень логирования</h2>
+  <p>HTTP-access-лог (каждый запрос) пишется на уровне <code>debug</code> — по умолчанию (<code>LOG_LEVEL=info</code>) эти строки не сохраняются. Установите переменную окружения <code>LOG_LEVEL=debug</code> при запуске, если нужно видеть каждый HTTP-запрос в логах.</p>
 </section>
 
 <!-- RATE LIMITING -->
@@ -450,6 +519,10 @@ RateLimit-Reset: 42
   <h2>Cisco SSH</h2>
   <p>Подключается по SSH, выполняет <code>show ip arp</code> и парсит ARP-таблицу. Поддерживаются старые алгоритмы шифрования (IOS 12.x+). Импортированные устройства получают категорию «workstation», тип «DHCP Client».</p>
 
+  <h2>LLDP/CDP-автотопология (любой вендор, по SNMP)</h2>
+  <p>Настройки → Обнаружение сети → LLDP/CDP-обнаружение. В отличие от автотопологии MikroTik выше, работает с <strong>любым</strong> сетевым устройством с включённым SNMP-опросом (галочка в карточке устройства), независимо от вендора. Сначала пробуется стандартный LLDP (IEEE 802.1AB), если сосед его не поддерживает — CDP (Cisco). Найденные соседи сопоставляются с существующими устройствами по IP или имени, недостающие — создаются автоматически, связи строятся на карте с меткой вида <code>ether1 → gi0/1</code>.</p>
+  <div class="alert warning"><strong>⚠</strong> Реальные ответы LLDP/CDP заметно отличаются между вендорами (особенно кодировка chassis ID — MAC vs текст). Если после обновления соседи распознаются нечитаемо для конкретного оборудования — пришлите пример вывода <code>snmpwalk</code>, парсинг можно доточить под конкретного вендора.</div>
+
   <h2>OUI (производители по MAC)</h2>
   <p>База производителей скачивается с <code>standards-oui.ieee.org</code> при первом запуске и обновляется раз в 30 дней. Раздел Настройки → OUI → «Обновить сейчас» для принудительного обновления.</p>
 </section>
@@ -478,6 +551,12 @@ curl https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates
   "time": "2026-08-08T10:00:00.000Z"
 }</pre>
 
+  <h2>Email (SMTP)</h2>
+  <p>Отправка через <code>nodemailer</code>. Поддерживает STARTTLS (порт 587, по умолчанию) и TLS с самого начала (порт 465). Для Gmail/Yandex/Mail.ru обычно нужен «пароль приложения», а не обычный пароль от почты. Кнопка «Тест» отправит пробное письмо.</p>
+
+  <h2>Ntfy.sh</h2>
+  <p>Self-hosted или публичный push через <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy.sh</a> — укажите сервер, топик и опциональный токен авторизации. Приоритет и цвет уведомления автоматически подстраиваются под статус (down → высокий приоритет, красный; up → обычный, зелёный).</p>
+
   <h2>Параметры алертов</h2>
   <table>
     <tr><th>Параметр</th><th>Описание</th></tr>
@@ -491,6 +570,13 @@ curl https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates
 
   <h2>Алерты на устройство</h2>
   <p>В карточке каждого устройства есть галочка «Алерты». Снимите её чтобы исключить конкретное устройство из системы уведомлений, оставив его под мониторингом.</p>
+
+  <h2>Webhook на любое событие (отдельно от алертов)</h2>
+  <p>Настройки → Webhook-события. В отличие от алертов выше (только недоступность/восстановление устройств), сюда попадает
+  <b>любое действие в системе</b> — создание/удаление устройств, изменение пользователей, импорт, смена настроек и т.д.:
+  тот же набор событий, что пишется в аудит-лог. Работает независимо от того, включён ли сам аудит-лог в разделе «Функции».</p>
+  <pre>{ "event": "device.create", "details": "...", "user": "admin", "ip": "10.0.0.5", "time": "2026-08-22T10:00:00.000Z" }</pre>
+  <p>Опциональный секрет уходит в заголовок <code>X-Netmonitor-Secret</code> — используйте его на принимающей стороне для проверки подлинности запроса. Фильтр по конкретным типам событий — если ничего не выбрано, летят все.</p>
 </section>
 
 <!-- MAINTENANCE -->
@@ -1350,14 +1436,192 @@ app.use('/api', require('./src/routes/myroute'));</pre>
       <span class="endpoint-desc">Health check (без авторизации)</span>
     </div>
     <div class="endpoint-body">
-      <h4>Response 200</h4><pre>{ "status": "ok", "version": "0.9.0-beta", "uptimeSec": 3600, "time": "2026-08-08T..." }</pre>
+      <h4>Response 200</h4><pre>{ "status": "ok", "version": "26w34-b01", "uptimeSec": 3600, "time": "2026-08-08T..." }</pre>
     </div>
   </div>
+</section>
+
+<!-- API LDAP -->
+<section id="api-ldap" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / API / <span>LDAP</span></div></div>
+  <h1>API — LDAP / Active Directory</h1>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)">
+      <span class="method GET">GET</span><span class="endpoint-path">/api/ldap</span>
+      <span class="endpoint-desc">Текущие настройки LDAP</span><span class="admin-badge">admin</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Пароль сервисной учётной записи (<code>bindPassword</code>) маскируется как <code>••••••••</code>, если задан.</p>
+      <h4>Response 200</h4><pre>{ "enabled": false, "url": "", "bindDN": "", "bindPassword": "", "baseDN": "", "userFilter": "(sAMAccountName={{username}})", "defaultRole": "viewer", "roleMapping": [], "rejectUnauthorized": true }</pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)">
+      <span class="method POST">POST</span><span class="endpoint-path">/api/ldap</span>
+      <span class="endpoint-desc">Сохранить настройки LDAP</span><span class="admin-badge">admin</span>
+    </div>
+    <div class="endpoint-body">
+      <p><code>roleMapping</code> — список правил <code>{ group: "CN=...,DC=...", role: "admin"|"operator"|"viewer" }</code>, проверяются сверху вниз, первое совпадение побеждает.</p>
+      <h4>Request Body</h4><pre>{ "enabled": true, "url": "ldap://dc1.example.local:389", "bindDN": "CN=svc-netmonitor,...", "bindPassword": "...", "baseDN": "OU=Users,DC=example,DC=local", "roleMapping": [{ "group": "CN=NetAdmins,...", "role": "admin" }] }</pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)">
+      <span class="method POST">POST</span><span class="endpoint-path">/api/ldap/test</span>
+      <span class="endpoint-desc">Проверить соединение и Bind DN</span><span class="admin-badge">admin</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Пароль пользователя не проверяется — только bind сервисной учётной записью. Передайте <code>{ "useSaved": true }</code> чтобы использовать уже сохранённые настройки без повторного ввода пароля.</p>
+      <h4>Response 200</h4><pre>{ "ok": true, "message": "Соединение и Bind DN успешны." }</pre>
+    </div>
+  </div>
+
+  <div class="alert warning"><strong>⚠</strong> Вход через LDAP работает как дополнение к локальным учётным записям: если логин уже есть локально (например <code>admin</code>) — используется локальный пароль как обычно. Если логина нет локально и LDAP включён — выполняется поиск и проверка пароля в каталоге; при успехе учётная запись создаётся автоматически с ролью по группам. Пароль LDAP-пользователей нигде не хранится в NetMonitor.</div>
+</section>
+
+<!-- API SITES -->
+<section id="api-sites" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / API / <span>Sites</span></div></div>
+  <h1>API — Sites (площадки)</h1>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)">
+      <span class="method GET">GET</span><span class="endpoint-path">/api/sites</span>
+      <span class="endpoint-desc">Список площадок</span><span class="auth-badge">auth</span>
+    </div>
+    <div class="endpoint-body">
+      <h4>Response 200</h4><pre>[{ "id": "moskva-офис-a1b2", "name": "Москва (офис)", "color": "#3b82f6", "address": "ул. Ленина 1", "sort": 0 }]</pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)">
+      <span class="method POST">POST</span><span class="endpoint-path">/api/sites</span>
+      <span class="endpoint-desc">Заменить список площадок целиком</span><span class="admin-badge">operator+</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Полная замена (как у категорий): передайте весь желаемый список. Площадку, на которую всё ещё ссылается хотя бы одно устройство, удалить нельзя — вернётся <code>400 site_in_use</code>.</p>
+      <h4>Request Body</h4><pre>{ "sites": [{ "id": null, "name": "Санкт-Петербург (филиал)", "color": "#10b981", "address": "" }] }</pre>
+      <h4>Response 400 (площадка используется)</h4><pre>{ "error": "site_in_use", "message": "Площадка используется устройствами: ..." }</pre>
+    </div>
+  </div>
+
+  <p>Привязка устройства к площадке — поле <code>site</code> (id площадки или <code>null</code>) в теле <code>POST /api/devices</code> / <code>PUT /api/devices/:id</code>. Фильтр по площадке на дешборде — параметр <code>?site=</code> у <code>GET /api/dashboard/widgets</code>.</p>
+</section>
+
+<!-- API LOGS -->
+<section id="api-logs" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / API / <span>Logs</span></div></div>
+  <h1>API — Logs</h1>
+  <p class="subtitle">Файлы пишет <code>pino-roll</code>: ротация ежедневная, хранится 7 файлов, все с числовым суффиксом (<code>app.log.1</code>, <code>app.log.2</code>, ...) — файла без суффикса не существует, «текущий» определяется по наибольшему номеру.</p>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)">
+      <span class="method GET">GET</span><span class="endpoint-path">/api/logs</span>
+      <span class="endpoint-desc">Последние строки текущего активного файла</span><span class="admin-badge">admin</span>
+    </div>
+    <div class="endpoint-body">
+      <h4>Query</h4><pre>?lines=200   // 1–2000, по умолчанию 200
+&level=INFO  // TRACE|DEBUG|INFO|WARN|ERROR|FATAL, опционально
+&search=...  // подстрока по всей строке, опционально</pre>
+      <h4>Response 200</h4><pre>{ "date": "2026-08-22", "count": 42, "lines": [{ "ts": 1787..., "level": "INFO", "msg": "NetMonitor запущен (HTTP)" }] }</pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)">
+      <span class="method GET">GET</span><span class="endpoint-path">/api/logs/files</span>
+      <span class="endpoint-desc">Список архивных файлов (без текущего)</span><span class="admin-badge">admin</span>
+    </div>
+    <div class="endpoint-body">
+      <h4>Response 200</h4><pre>{ "files": [{ "date": "2026-08-21", "sizeBytes": 40213 }] }</pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)">
+      <span class="method GET">GET</span><span class="endpoint-path">/api/logs/file/:date</span>
+      <span class="endpoint-desc">Строки из конкретного архива</span><span class="admin-badge">admin</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Те же query-параметры, что у <code>GET /api/logs</code>. <code>:date</code> — <code>YYYY-MM-DD</code>, взятое из mtime файла.</p>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)">
+      <span class="method GET">GET</span><span class="endpoint-path">/api/logs/file/:date/download</span>
+      <span class="endpoint-desc">Скачать файл целиком (raw, без фильтров)</span><span class="admin-badge">admin</span>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)">
+      <span class="method DELETE">DELETE</span><span class="endpoint-path">/api/logs/file/:date</span>
+      <span class="endpoint-desc">Удалить архивный файл</span><span class="admin-badge">admin</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Текущий активный файл удалить нельзя (в него идёт запись) — вернётся <code>400 cannot_delete_current</code>.</p>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)">
+      <span class="method GET">GET</span><span class="endpoint-path">/api/logs/stream</span>
+      <span class="endpoint-desc">Живой tail в реальном времени (SSE)</span><span class="admin-badge">admin</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Как <code>docker logs -f</code>: опрос файла раз в 1.5с, отдаёт только новые байты, прозрачно переключается на новый файл при ротации. Не шлёт весь бэклог при подключении — только записи с момента открытия соединения.</p>
+      <h4>Event stream</h4><pre>data: { "ts": 1787390220616, "level": "DEBUG", "msg": "HTTP", "method": "GET", "url": "/devices", "status": 200, "ms": 4 }</pre>
+    </div>
+  </div>
+</section>
+
+<!-- API EVENT WEBHOOK -->
+<section id="api-event-webhook" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / API / <span>Event Webhook</span></div></div>
+  <h1>API — Event Webhook</h1>
+  <p class="subtitle">Отдельно от алертов на устройства (см. раздел «Алерты») — сюда попадает любое действие в системе, тот же набор событий, что пишется в аудит-лог.</p>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)">
+      <span class="method GET">GET</span><span class="endpoint-path">/api/event-webhook</span>
+      <span class="endpoint-desc">Текущие настройки</span><span class="admin-badge">admin</span>
+    </div>
+    <div class="endpoint-body">
+      <h4>Response 200</h4><pre>{ "enabled": false, "url": "", "events": [], "secret": "" }</pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)">
+      <span class="method POST">POST</span><span class="endpoint-path">/api/event-webhook</span>
+      <span class="endpoint-desc">Сохранить настройки</span><span class="admin-badge">admin</span>
+    </div>
+    <div class="endpoint-body">
+      <p><code>events</code> — пустой массив означает «все события», иначе список конкретных типов (например <code>["device.create","user.role_change"]</code>).</p>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)">
+      <span class="method POST">POST</span><span class="endpoint-path">/api/event-webhook/test</span>
+      <span class="endpoint-desc">Отправить тестовое событие</span><span class="admin-badge">admin</span>
+    </div>
+  </div>
+
+  <h4>Тело запроса, которое уходит на ваш URL</h4>
+  <pre>{ "event": "device.create", "details": "Router1 (10.0.0.1)", "user": "admin", "ip": "10.0.0.5", "time": "2026-08-22T10:00:00.000Z" }</pre>
+  <p>Если задан <code>secret</code> — уходит в заголовке <code>X-Netmonitor-Secret</code> для проверки подлинности на принимающей стороне.</p>
 </section>
 
 <!-- API MAINTENANCE -->
 <section id="api-maintenance" class="section">
   <div class="top-bar"><div class="breadcrumb">Docs / API / <span>Maintenance</span></div></div>
+
   <h1>API — Maintenance Windows</h1>
 
   <div class="endpoint">

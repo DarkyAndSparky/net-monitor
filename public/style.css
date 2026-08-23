@@ -141,6 +141,8 @@ input:focus,select:focus,textarea:focus{outline:none; border-color:var(--accent)
 }
 .btn-secondary:hover{background:var(--bg);}
 .btn-secondary:disabled,.btn-secondary.loading{opacity:.55; cursor:not-allowed; pointer-events:none;}
+.btn-secondary.active{background:var(--red); color:#fff; border-color:var(--red); animation:pulse-live 1.6s ease-in-out infinite;}
+@keyframes pulse-live{0%,100%{opacity:1;}50%{opacity:.72;}}
 
 /* spinner внутри кнопки при loading */
 .btn-primary.loading::before,

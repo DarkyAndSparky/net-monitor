@@ -64,9 +64,14 @@ router.get('/oui/status', requireAuth, (req,res) =>
   res.json({ entryCount:Object.keys(ouiTable).length, updatedAt:ouiUpdatedAt, stale:!ouiUpdatedAt||Date.now()-ouiUpdatedAt>OUI_MAX_AGE, lastError:ouiLastError })
 );
 router.post('/oui/refresh', requireOperator, async (req,res) => {
-  const r=await refreshOuiDatabase();
-  logAudit(req,'oui.refresh',r.ok?`${r.count} записей`:r.message);
-  r.ok?res.json(r):res.status(502).json(r);
+  try {
+    const r=await refreshOuiDatabase();
+    logAudit(req,'oui.refresh',r.ok?`${r.count} записей`:r.message);
+    r.ok?res.json(r):res.status(502).json(r);
+  } catch (err) {
+    console.error('[OUI refresh route]', err);
+    res.status(500).json({ ok:false, message: 'internal_error' });
+  }
 });
 
 // ══════════════════════════════════════════════════════════════════════

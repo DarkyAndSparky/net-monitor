@@ -221,6 +221,7 @@ app.use('/api/maintenance',  require('./src/routes/maintenance'));
 app.use('/api/device',       require('./src/routes/device-detail'));
 app.use('/api/traffic',      require('./src/routes/traffic'));
 app.use('/api',              require('./src/routes/agent'));
+app.use('/api',              require('./src/routes/logs'));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── Определяем локальный IP ───────────────────────────────────────────

@@ -115,6 +115,7 @@ router.get('/branding/logo', (req, res) => {
 router.get('/backup', requireAdmin, (req, res) => {
   const devices  = db.prepare('SELECT * FROM devices').all().map(deviceRow);
   const categories = db.prepare('SELECT * FROM categories ORDER BY sort').all();
+  const sites    = db.prepare('SELECT * FROM sites ORDER BY sort').all();
   const users    = db.prepare('SELECT username,role FROM users').all();
   const edges    = db.prepare('SELECT * FROM topology_edges').all();
   const incidents= db.prepare('SELECT * FROM incidents ORDER BY start_ts').all();
@@ -123,7 +124,7 @@ router.get('/backup', requireAdmin, (req, res) => {
   const bundle = {
     version: 2,
     exportedAt: new Date().toISOString(),
-    devices: { devices, categories },
+    devices: { devices, categories, sites },
     users: { users },
     settings: {
       mikrotiks:        getSetting('mikrotiks')||[],
@@ -133,6 +134,8 @@ router.get('/backup', requireAdmin, (req, res) => {
       features:         getFeatures(),
       branding:         getSetting('branding')||{},
       subnetRules:      getSetting('subnetRules')||[],
+      eventWebhook:     getSetting('eventWebhook')||{},
+      ldap:             getSetting('ldap')||{},
     },
     topology: { edges: edges.map(e=>({id:e.id,from:e.from_id,to:e.to_id,label:e.label,interface:e.iface,manual:!!e.manual,viaRouterId:e.via_router_id})) },
     incidents: { closed: incidents.filter(i=>i.end_ts).map(i=>({deviceId:i.device_id,deviceName:i.device_name,start:i.start_ts,end:i.end_ts,durationSec:i.duration_sec,escalated:!!i.escalated})) },
@@ -151,18 +154,21 @@ router.post('/backup/restore', requireAdmin, (req, res) => {
       // Устройства и категории
       db.prepare('DELETE FROM devices').run();
       db.prepare('DELETE FROM categories').run();
+      db.prepare('DELETE FROM sites').run();
       const defCats=[{id:'network',name:'Сетевое оборудование',color:'#3b82f6',sort:1},{id:'server',name:'Серверы',color:'#8b5cf6',sort:2},{id:'workstation',name:'Пользовательские устройства',color:'#10b981',sort:3},{id:'cctv',name:'Видеонаблюдение',color:'#f59e0b',sort:4},{id:'other',name:'Прочее',color:'#6b7280',sort:5}];
       (b.devices.categories||defCats).forEach((c,i)=>db.prepare('INSERT OR REPLACE INTO categories (id,name,color,sort) VALUES (?,?,?,?)').run(c.id,c.name,c.color||'#6b7280',i));
+      (b.devices.sites||[]).forEach((s,i)=>db.prepare('INSERT OR REPLACE INTO sites (id,name,color,address,sort) VALUES (?,?,?,?,?)').run(s.id,s.name,s.color||'#6b7280',s.address||'',i));
       (b.devices.devices||[]).forEach(d=>{
-        db.prepare(`INSERT OR REPLACE INTO devices (id,name,ip,mac,location,type,category_id,comment,is_key,monitored,check_interval,alerts_enabled,source,snmp_enabled,snmp_community,snmp_port,port_checks,x,y) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
-          d.id,d.name||'Без имени',d.ip||'',d.mac||'',d.location||'',d.type||'',d.category||'other',d.comment||'',
+        db.prepare(`INSERT OR REPLACE INTO devices (id,name,ip,mac,location,site_id,type,category_id,comment,is_key,monitored,check_interval,alerts_enabled,source,snmp_enabled,snmp_community,snmp_port,snmp_if_index,port_checks,x,y) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+          d.id,d.name||'Без имени',d.ip||'',d.mac||'',d.location||'',d.site||null,d.type||'',d.category||'other',d.comment||'',
           d.key?1:0,d.monitored!==false?1:0,d.checkInterval||DEFAULT_INT,d.alertsEnabled!==false?1:0,d.source||'restore',
           d.snmp?.enabled?1:0,d.snmp?.community||'public',d.snmp?.port||161,
+          d.snmp?.ifIndex!=null&&d.snmp.ifIndex!==''?Number(d.snmp.ifIndex):null,
           JSON.stringify(d.portChecks||[]),d.x||300,d.y||300
         );
       });
       // Настройки
-      ['mikrotiks','unifiControllers','ciscoDevices','alerting','features','branding','subnetRules'].forEach(k=>{if(b.settings[k]!=null)setSetting(k,b.settings[k]);});
+      ['mikrotiks','unifiControllers','ciscoDevices','alerting','features','branding','subnetRules','eventWebhook','ldap'].forEach(k=>{if(b.settings[k]!=null)setSetting(k,b.settings[k]);});
       // Топология
       db.prepare('DELETE FROM topology_edges').run();
       (b.topology?.edges||[]).forEach(e=>db.prepare('INSERT OR IGNORE INTO topology_edges (id,from_id,to_id,label,iface,manual,via_router_id) VALUES (?,?,?,?,?,?,?)').run(e.id||newId('e'),e.from,e.to,e.label||'',e.interface||'',e.manual?1:0,e.viaRouterId||null));
@@ -201,16 +207,21 @@ router.post('/ldap', requireAdmin, (req, res) => {
 });
 
 router.post('/ldap/test', requireAdmin, async (req, res) => {
-  const cfg = req.body?.useSaved ? (getSetting('ldap') || {}) : req.body;
-  if (req.body?.useSaved) {
-    const saved = getSetting('ldap') || {};
-    if (!saved.bindPassword) return res.status(400).json({ ok: false, error: 'Пароль сервисной учётной записи не сохранён' });
-  } else if (cfg.bindPassword === '••••••••') {
-    cfg.bindPassword = (getSetting('ldap') || {}).bindPassword || '';
+  try {
+    const cfg = req.body?.useSaved ? (getSetting('ldap') || {}) : req.body;
+    if (req.body?.useSaved) {
+      const saved = getSetting('ldap') || {};
+      if (!saved.bindPassword) return res.status(400).json({ ok: false, error: 'Пароль сервисной учётной записи не сохранён' });
+    } else if (cfg.bindPassword === '••••••••') {
+      cfg.bindPassword = (getSetting('ldap') || {}).bindPassword || '';
+    }
+    const { testConnection } = require('../services/ldap');
+    const result = await testConnection(cfg);
+    res.json(result);
+  } catch (err) {
+    console.error('[LDAP test route]', err);
+    res.status(500).json({ ok: false, error: 'internal_error' });
   }
-  const { testConnection } = require('../services/ldap');
-  const result = await testConnection(cfg);
-  res.json(result);
 });
 
 module.exports = router;

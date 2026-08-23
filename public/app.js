@@ -697,6 +697,78 @@ function esc(s) {
   return (s || '').toString().replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
 
+// ---------------- TOAST-УВЕДОМЛЕНИЯ ----------------
+// Разметка (#toast-container) и вся анимация уже были в HTML/CSS — не хватало
+// только этой функции. Использовалась по всему коду (24 места), но нигде не
+// была объявлена: каждый вызов ронял ReferenceError и молча обрывал остаток
+// содержащей его функции.
+const TOAST_ICONS = { success: 'ti-circle-check', error: 'ti-circle-x', warning: 'ti-alert-triangle', info: 'ti-info-circle' };
+function toast(message, type = 'info', duration = 4000) {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<i class="ti ${TOAST_ICONS[type] || TOAST_ICONS.info}"></i><div class="toast-msg">${esc(message)}</div><button type="button" class="toast-close" aria-label="Закрыть">✕</button>`;
+  const remove = () => {
+    el.classList.add('hide');
+    setTimeout(() => el.remove(), 200);
+  };
+  el.querySelector('.toast-close').addEventListener('click', remove);
+  const timer = setTimeout(remove, duration);
+  el.addEventListener('mouseenter', () => clearTimeout(timer));
+  container.appendChild(el);
+}
+
+// ---------------- ПОДТВЕРЖДЕНИЕ ДЕЙСТВИЯ (замена window.confirm) ----------------
+// Разметка и CSS уже существовали (#confirm-dialog-overlay), функции не было.
+function showConfirm(title, subtitle = '', options = {}) {
+  return new Promise(resolve => {
+    const overlay = document.getElementById('confirm-dialog-overlay');
+    document.getElementById('confirm-dialog-title').textContent = title;
+    document.getElementById('confirm-dialog-text').textContent = subtitle;
+    const okBtn = document.getElementById('confirm-dialog-ok');
+    const cancelBtn = document.getElementById('confirm-dialog-cancel');
+    okBtn.textContent = options.okLabel || 'Удалить';
+    okBtn.className = options.okClass || '';
+    if (!options.okClass) okBtn.removeAttribute('style'); // сброс на дефолтный красный стиль из CSS (#confirm-dialog-ok)
+
+    const cleanup = (result) => {
+      overlay.classList.add('hidden');
+      okBtn.removeEventListener('click', onOk);
+      cancelBtn.removeEventListener('click', onCancel);
+      overlay.removeEventListener('click', onOverlayClick);
+      document.removeEventListener('keydown', onKeydown);
+      resolve(result);
+    };
+    const onOk = () => cleanup(true);
+    const onCancel = () => cleanup(false);
+    const onOverlayClick = (e) => { if (e.target === overlay) cleanup(false); };
+    const onKeydown = (e) => { if (e.key === 'Escape') cleanup(false); };
+
+    okBtn.addEventListener('click', onOk);
+    cancelBtn.addEventListener('click', onCancel);
+    overlay.addEventListener('click', onOverlayClick);
+    document.addEventListener('keydown', onKeydown);
+    overlay.classList.remove('hidden');
+    setTimeout(() => cancelBtn.focus(), 50);
+  });
+}
+
+// ---------------- ПЕРЕКЛЮЧЕНИЕ ВКЛАДОК ПРОГРАММНО ----------------
+// Обычный клик по .nav-btn уже был закольцован отдельным обработчиком ниже —
+// эта функция нужна для программных переходов (пустые состояния, горячие
+// клавиши), которые эту логику не проходили и были сломаны.
+function showTab(tabName) {
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  const btn = document.querySelector(`.nav-btn[data-tab="${tabName}"]`);
+  const panel = document.getElementById('tab-' + tabName);
+  if (btn) btn.classList.add('active');
+  if (panel) panel.classList.add('active');
+  if (tabName === 'discovery') initDiscoveryTab();
+  if (tabName === 'incidents') loadIncidents();
+}
+
 // Индикатор загрузки на кнопке: добавляет класс .loading (спиннер уже есть в CSS
 // через ::before) и блокирует повторный клик. Возвращает restore() для отмены.
 function btnLoading(btn) {
@@ -2543,6 +2615,9 @@ async function loadAlertSettings() {
     document.getElementById('al-email-pass').value = cfg.email?.pass || '';
     document.getElementById('al-email-from').value = cfg.email?.from || '';
     document.getElementById('al-email-to').value = cfg.email?.to || '';
+    document.getElementById('al-esc-enabled').checked = !!cfg.escalation?.enabled;
+    document.getElementById('al-esc-minutes').value = String(cfg.escalation?.afterMinutes || 60);
+    document.getElementById('al-esc-chat').value = cfg.escalation?.telegramChatId || '';
   } catch (e) { /* ignore */ }
 }
 
@@ -2578,6 +2653,11 @@ async function saveAlertSettings() {
         pass: document.getElementById('al-email-pass').value,
         from: document.getElementById('al-email-from').value,
         to: document.getElementById('al-email-to').value
+      },
+      escalation: {
+        enabled: document.getElementById('al-esc-enabled').checked,
+        afterMinutes: Number(document.getElementById('al-esc-minutes').value) || 60,
+        telegramChatId: document.getElementById('al-esc-chat').value
       }
     })
   });
@@ -2622,14 +2702,7 @@ document.getElementById('password-form').addEventListener('submit', async (e) =>
 
 // ---------------- NAV / TABS ----------------
 document.querySelectorAll('.nav-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
-    if (btn.dataset.tab === 'discovery') initDiscoveryTab();
-    if (btn.dataset.tab === 'incidents') loadIncidents();
-  });
+  btn.addEventListener('click', () => showTab(btn.dataset.tab));
 });
 
 // ---------------- FILTERS / VIEW TOGGLE ----------------
@@ -2849,7 +2922,7 @@ const EVENT_WEBHOOK_ACTIONS = [
   'agent.token_generate','agent.token_reset','agent.unlink',
   'alert_settings.update','event_webhook.update','features.update',
   'branding.update','categories.update','oui.refresh',
-  'backup.download','backup.restore','ldap.update'
+  'backup.download','backup.restore','ldap.update','logs.delete'
 ];
 
 function populateEventWebhookSelect() {
@@ -3061,7 +3134,7 @@ async function initLogsTab() {
   try {
     const data = await api('/api/logs/files').then(r => r.json());
     const sel = document.getElementById('logs-date-select');
-    sel.innerHTML = '<option value="">Сегодня</option>';
+    sel.innerHTML = '<option value="">Сегодня (текущий)</option>';
     (data.files || []).forEach(f => {
       const opt = document.createElement('option');
       opt.value = f.date;
@@ -3070,28 +3143,44 @@ async function initLogsTab() {
       sel.appendChild(opt);
     });
   } catch {}
+  stopLogsLiveTail();
+  await loadLogs();
+}
+
+let _logsSearchDebounce = null;
+function loadLogsDebounced() {
+  clearTimeout(_logsSearchDebounce);
+  _logsSearchDebounce = setTimeout(loadLogs, 300);
 }
 
 async function loadLogs() {
   const date    = document.getElementById('logs-date-select').value;
   const level   = document.getElementById('logs-level-select').value;
   const lines   = document.getElementById('logs-lines-select').value;
+  const search  = document.getElementById('logs-search').value.trim();
   const container = document.getElementById('logs-container');
   const stats   = document.getElementById('logs-stats');
   const delBtn  = document.getElementById('logs-delete-btn');
+  const dlBtn   = document.getElementById('logs-download-btn');
+  const liveBtn = document.getElementById('logs-live-btn');
+
+  liveBtn.style.display = date ? 'none' : ''; // живой tail только для текущего активного файла
+  if (date) stopLogsLiveTail();
 
   container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-dim);">Загрузка...</div>';
 
   try {
-    const url = date
-      ? `/api/logs/file/${date}?lines=${lines}${level ? '&level=' + level : ''}`
-      : `/api/logs?lines=${lines}${level ? '&level=' + level : ''}`;
+    const params = new URLSearchParams({ lines });
+    if (level) params.set('level', level);
+    if (search) params.set('search', search);
+    const url = date ? `/api/logs/file/${encodeURIComponent(date)}?${params}` : `/api/logs?${params}`;
 
     const data = await api(url).then(r => r.json());
 
     stats.textContent = `Дата: ${data.date} · Строк: ${data.count}`;
     delBtn.style.display = date ? '' : 'none';
-    delBtn.dataset.date = date || data.date;
+    delBtn.dataset.date = date || '';
+    dlBtn.href = date ? `/api/logs/file/${encodeURIComponent(date)}/download` : `/api/logs/file/${encodeURIComponent(data.date)}/download`;
 
     if (!data.lines || !data.lines.length) {
       container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-dim);">Нет записей</div>';
@@ -3099,31 +3188,63 @@ async function loadLogs() {
     }
 
     // Рендерим строки снизу вверх (новые снизу)
-    container.innerHTML = data.lines.map(line => {
-      const ts   = line.ts ? new Date(line.ts).toLocaleTimeString('ru-RU') : '—';
-      const lvl  = line.level || 'RAW';
-      const msg  = line.msg || '';
-      const color = LEVEL_COLORS[lvl] || '#8b95ab';
-
-      // Дополнительные поля (всё кроме ts, level, msg)
-      const extra = Object.entries(line)
-        .filter(([k]) => !['ts','level','msg'].includes(k))
-        .map(([k,v]) => `<span style="opacity:.6;">${k}=</span>${typeof v==='object'?JSON.stringify(v):v}`)
-        .join(' ');
-
-      return `<div style="display:flex;gap:8px;padding:3px 10px;border-bottom:1px solid var(--border);font-size:11.5px;line-height:1.6;" onmouseover="this.style.background='var(--panel)'" onmouseout="this.style.background=''">
-        <span style="color:var(--text-dim);flex-shrink:0;width:60px;">${ts}</span>
-        <span style="color:${color};flex-shrink:0;width:48px;font-weight:600;">${lvl}</span>
-        <span style="flex:1;word-break:break-all;">${msg}${extra ? ' <span style="opacity:.5;font-size:10.5px;">' + extra + '</span>' : ''}</span>
-      </div>`;
-    }).join('');
+    container.innerHTML = data.lines.map(logLineHTML).join('');
 
     // Скроллим вниз (новые записи внизу)
     container.scrollTop = container.scrollHeight;
 
   } catch(e) {
-    container.innerHTML = `<div style="padding:24px;text-align:center;color:var(--red);">Ошибка: ${e.message}</div>`;
+    container.innerHTML = `<div style="padding:24px;text-align:center;color:var(--red);">Ошибка: ${esc(e.message)}</div>`;
   }
+}
+
+// Общий рендер одной строки лога — используется и статичной загрузкой, и живым tail
+function logLineHTML(line) {
+  const ts   = line.ts ? new Date(line.ts).toLocaleTimeString('ru-RU') : '—';
+  const lvl  = line.level || 'RAW';
+  const msg  = line.msg || '';
+  const color = LEVEL_COLORS[lvl] || '#8b95ab';
+
+  const extra = Object.entries(line)
+    .filter(([k]) => !['ts','level','msg'].includes(k))
+    .map(([k,v]) => `<span style="opacity:.6;">${esc(k)}=</span>${esc(typeof v==='object'?JSON.stringify(v):String(v))}`)
+    .join(' ');
+
+  return `<div style="display:flex;gap:8px;padding:3px 10px;border-bottom:1px solid var(--border);font-size:11.5px;line-height:1.6;" onmouseover="this.style.background='var(--panel)'" onmouseout="this.style.background=''">
+    <span style="color:var(--text-dim);flex-shrink:0;width:60px;">${esc(ts)}</span>
+    <span style="color:${color};flex-shrink:0;width:48px;font-weight:600;">${esc(lvl)}</span>
+    <span style="flex:1;word-break:break-all;">${esc(msg)}${extra ? ' <span style="opacity:.5;font-size:10.5px;">' + extra + '</span>' : ''}</span>
+  </div>`;
+}
+
+// ---------------- ЖИВОЙ TAIL (как `docker logs -f`), через SSE ----------------
+let _logsEventSource = null;
+function startLogsLiveTail() {
+  if (_logsEventSource) return;
+  const container = document.getElementById('logs-container');
+  const liveBtn = document.getElementById('logs-live-btn');
+  _logsEventSource = new EventSource('/api/logs/stream');
+  liveBtn.classList.add('active');
+  liveBtn.textContent = '🔴 Live (вкл)';
+  _logsEventSource.onmessage = (ev) => {
+    try {
+      const line = JSON.parse(ev.data);
+      if (container.children.length === 1 && container.textContent.includes('Нет записей')) container.innerHTML = '';
+      container.insertAdjacentHTML('beforeend', logLineHTML(line));
+      // Не даём контейнеру расти бесконечно при долго открытой вкладке
+      while (container.children.length > 2000) container.removeChild(container.firstChild);
+      container.scrollTop = container.scrollHeight;
+    } catch {}
+  };
+  _logsEventSource.onerror = () => { /* браузер сам переподключится; ничего не делаем */ };
+}
+function stopLogsLiveTail() {
+  if (_logsEventSource) { _logsEventSource.close(); _logsEventSource = null; }
+  const liveBtn = document.getElementById('logs-live-btn');
+  if (liveBtn) { liveBtn.classList.remove('active'); liveBtn.textContent = '🔴 Live'; }
+}
+function toggleLogsLiveTail() {
+  if (_logsEventSource) stopLogsLiveTail(); else startLogsLiveTail();
 }
 
 async function deleteLogFile() {
@@ -3133,11 +3254,10 @@ async function deleteLogFile() {
   const ok = await showConfirm(`Удалить лог за ${date}?`, 'Файл будет удалён безвозвратно.');
   if (!ok) return;
   try {
-    await api(`/api/logs/file/${date}`, { method: 'DELETE' });
+    await api(`/api/logs/file/${encodeURIComponent(date)}`, { method: 'DELETE' });
     toast(`Лог за ${date} удалён`, 'success');
-    await initLogsTab();
     document.getElementById('logs-date-select').value = '';
-    await loadLogs();
+    await initLogsTab();
   } catch(e) {
     toast('Ошибка удаления: ' + e.message, 'error');
   }
@@ -3149,6 +3269,8 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('click', () => {
       if (btn.dataset.settingsTab === 'logs') {
         initLogsTab();
+      } else {
+        stopLogsLiveTail(); // ушли с вкладки логов — закрываем SSE-соединение
       }
     });
   });
@@ -3598,7 +3720,7 @@ function renderDeviceDetail(data) {
   // Кнопки
   document.getElementById('dd-edit-btn').onclick = () => {
     closeDeviceDetail();
-    openEditDevice(device.id);
+    openEdit(device.id);
   };
   document.getElementById('dd-check-btn').onclick = async () => {
     const btn = document.getElementById('dd-check-btn');

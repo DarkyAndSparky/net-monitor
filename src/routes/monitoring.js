@@ -17,14 +17,19 @@ router.get('/status', requireAuth, (req, res) => {
 
 // Ручная проверка
 router.post('/status/:id/check', requireAuth, async (req, res) => {
-  const d = db.prepare('SELECT * FROM devices WHERE id=?').get(req.params.id);
-  if (!d) return res.status(404).json({ error:'not_found' });
-  const { pingHost, statusCache } = require('../services/scheduler');
-  const online = d.ip ? await pingHost(d.ip) : false;
-  const now = Date.now();
-  statusCache[d.id] = { online, lastChecked:now };
-  if (d.monitored) db.prepare('INSERT INTO history (device_id,ts,online) VALUES (?,?,?)').run(d.id,now,online?1:0);
-  res.json({ id:d.id, online, lastChecked:now });
+  try {
+    const d = db.prepare('SELECT * FROM devices WHERE id=?').get(req.params.id);
+    if (!d) return res.status(404).json({ error:'not_found' });
+    const { pingHost, statusCache } = require('../services/scheduler');
+    const online = d.ip ? await pingHost(d.ip) : false;
+    const now = Date.now();
+    statusCache[d.id] = { online, lastChecked:now };
+    if (d.monitored) db.prepare('INSERT INTO history (device_id,ts,online) VALUES (?,?,?)').run(d.id,now,online?1:0);
+    res.json({ id:d.id, online, lastChecked:now });
+  } catch (err) {
+    require('../services/logger').error({ err }, 'status check failed unexpectedly');
+    res.status(500).json({ error: 'internal_error' });
+  }
 });
 
 // Массовое вкл/выкл мониторинга
@@ -79,16 +84,21 @@ router.post('/alert-settings', requireOperator, (req, res) => {
       to:inc.email?.to??prev.email?.to??'',
       rejectUnauthorized:inc.email?.rejectUnauthorized ?? prev.email?.rejectUnauthorized ?? true
     },
-    escalation:{ enabled:!!inc.escalation?.enabled, afterMinutes:Math.max(5,Number(inc.escalation?.afterMinutes)||60), telegramChatId:inc.escalation?.telegramChatId??prev.escalation?.telegramChatId??'' }
+    escalation:{ enabled:inc.escalation?.enabled!==undefined?!!inc.escalation.enabled:!!prev.escalation?.enabled, afterMinutes:Math.max(5,Number(inc.escalation?.afterMinutes)||prev.escalation?.afterMinutes||60), telegramChatId:inc.escalation?.telegramChatId??prev.escalation?.telegramChatId??'' }
   };
   require('../db').setSetting('alerting',cfg);
   logAudit(req,'alert_settings.update','');
   res.json({ ok:true });
 });
 router.post('/alert-settings/test', requireOperator, async (req, res) => {
-  const { dispatchAlert } = require('../services/scheduler');
-  await dispatchAlert(getSetting('alerting')||{},{id:'test',name:'Тестовое устройство',ip:'10.0.0.1',location:'Тест'},'test','🧪 Тестовое уведомление от NetMonitor.');
-  res.json({ ok:true });
+  try {
+    const { dispatchAlert } = require('../services/scheduler');
+    await dispatchAlert(getSetting('alerting')||{},{id:'test',name:'Тестовое устройство',ip:'10.0.0.1',location:'Тест'},'test','🧪 Тестовое уведомление от NetMonitor.');
+    res.json({ ok:true });
+  } catch (err) {
+    require('../services/logger').error({ err }, 'alert-settings/test failed unexpectedly');
+    res.status(500).json({ error: 'internal_error' });
+  }
 });
 
 // Webhook на любое событие (все действия аудит-лога, не только алерты устройств)
@@ -109,9 +119,14 @@ router.post('/event-webhook', requireAdmin, (req, res) => {
   res.json({ ok:true });
 });
 router.post('/event-webhook/test', requireAdmin, async (req, res) => {
-  const { fireEvent } = require('../services/eventWebhook');
-  await fireEvent('test.event','🧪 Тестовое событие от NetMonitor.',{ username:req.session?.userId||'—', ip:req.ip });
-  res.json({ ok:true });
+  try {
+    const { fireEvent } = require('../services/eventWebhook');
+    await fireEvent('test.event','🧪 Тестовое событие от NetMonitor.',{ username:req.session?.userId||'—', ip:req.ip });
+    res.json({ ok:true });
+  } catch (err) {
+    require('../services/logger').error({ err }, 'event-webhook/test failed unexpectedly');
+    res.status(500).json({ error: 'internal_error' });
+  }
 });
 
 // Дашборд v2 — SLA-индикатор, сводка по статусам, heat map устройств

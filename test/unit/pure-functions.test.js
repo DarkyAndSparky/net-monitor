@@ -130,3 +130,52 @@ describe('LDAP: roleFromGroups (маппинг ролей по группам AD
     assert.equal(roleFromGroups([], mapping, 'viewer'), 'viewer');
   });
 });
+
+describe('logs.parseLine (разбор строк pino-лога)', () => {
+  const { parseLine } = require('../../src/routes/logs');
+
+  test('разбирает валидную JSON-строку pino и переводит числовой level в текстовый', () => {
+    const line = JSON.stringify({ level: 30, time: '2026-08-22T10:00:00.000Z', pid: 123, msg: 'Сервер запущен' });
+    const parsed = parseLine(line);
+    assert.equal(parsed.level, 'INFO');
+    assert.equal(parsed.msg, 'Сервер запущен');
+    assert.equal(parsed.ts, Date.parse('2026-08-22T10:00:00.000Z'));
+  });
+
+  test('переводит все стандартные уровни pino корректно', () => {
+    const levels = { 10: 'TRACE', 20: 'DEBUG', 30: 'INFO', 40: 'WARN', 50: 'ERROR', 60: 'FATAL' };
+    for (const [num, name] of Object.entries(levels)) {
+      const parsed = parseLine(JSON.stringify({ level: Number(num), msg: 'x' }));
+      assert.equal(parsed.level, name, `level ${num} должен переводиться в ${name}`);
+    }
+  });
+
+  test('сохраняет дополнительные поля (method, url, status) отдельно от служебных', () => {
+    const line = JSON.stringify({ level: 30, time: '2026-08-22T10:00:00.000Z', pid: 1, hostname: 'h', v: 1, msg: 'HTTP', method: 'GET', url: '/devices', status: 200 });
+    const parsed = parseLine(line);
+    assert.equal(parsed.method, 'GET');
+    assert.equal(parsed.url, '/devices');
+    assert.equal(parsed.status, 200);
+    // служебные поля pid/hostname/v не должны просачиваться как "дополнительные"
+    assert.equal('pid' in parsed, false);
+    assert.equal('hostname' in parsed, false);
+    assert.equal('v' in parsed, false);
+  });
+
+  test('невалидный JSON не роняет парсер — возвращается как RAW с исходным текстом', () => {
+    const parsed = parseLine('это не JSON, а обычный текст из stdout стороннего процесса');
+    assert.equal(parsed.level, 'RAW');
+    assert.equal(parsed.msg, 'это не JSON, а обычный текст из stdout стороннего процесса');
+    assert.equal(parsed.ts, null);
+  });
+
+  test('JSON-массив или примитив (не объект) тоже трактуется как RAW', () => {
+    const parsed = parseLine('[1,2,3]');
+    assert.equal(parsed.level, 'RAW');
+  });
+
+  test('неизвестный числовой level не роняет парсер, даёт RAW', () => {
+    const parsed = parseLine(JSON.stringify({ level: 999, msg: 'странный уровень' }));
+    assert.equal(parsed.level, 'RAW');
+  });
+});

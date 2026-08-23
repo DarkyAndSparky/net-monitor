@@ -407,6 +407,7 @@
         <button class="settings-tab-btn admin-only" data-settings-tab="audit">📜 Аудит-лог</button>
         <button class="settings-tab-btn admin-only" data-settings-tab="event-webhook">🪝 Webhook-события</button>
         <button class="settings-tab-btn admin-only" data-settings-tab="ldap">🔐 LDAP/AD</button>
+        <button class="settings-tab-btn admin-only" data-settings-tab="logs">📋 Логи</button>
         <button class="settings-tab-btn" data-settings-tab="profile">🔑 Профиль</button>
         <button class="settings-tab-btn admin-strict" data-settings-tab="about">ℹ О системе</button>
       </div>
@@ -811,6 +812,43 @@
       </div>
       </div>
 
+      <!-- ЛОГИ -->
+      <div class="settings-subtab hidden" data-settings-panel="logs">
+      <h2 class="admin-only">Системные логи</h2>
+      <div class="settings-panel admin-only" style="max-width:100%;">
+        <p class="hint">
+          Логи сервера (pino), ротация ежедневная, хранится 7 файлов. «Live» — просмотр в реальном времени,
+          доступен только для текущего активного файла.
+        </p>
+        <div class="controls" style="flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+          <select id="logs-date-select" onchange="loadLogs()" style="min-width:170px;"></select>
+          <select id="logs-level-select" onchange="loadLogs()" style="min-width:120px;">
+            <option value="">Все уровни</option>
+            <option value="TRACE">TRACE</option>
+            <option value="DEBUG">DEBUG</option>
+            <option value="INFO">INFO</option>
+            <option value="WARN">WARN</option>
+            <option value="ERROR">ERROR</option>
+            <option value="FATAL">FATAL</option>
+          </select>
+          <select id="logs-lines-select" onchange="loadLogs()" style="min-width:110px;">
+            <option value="100">100 строк</option>
+            <option value="200" selected>200 строк</option>
+            <option value="500">500 строк</option>
+            <option value="1000">1000 строк</option>
+            <option value="2000">2000 строк</option>
+          </select>
+          <input type="text" id="logs-search" placeholder="Поиск по тексту..." oninput="loadLogsDebounced()" style="min-width:200px; flex:1;">
+          <button type="button" class="btn-secondary" onclick="loadLogs()">↻ Обновить</button>
+          <button type="button" class="btn-secondary" id="logs-live-btn" onclick="toggleLogsLiveTail()">🔴 Live</button>
+          <a class="btn-secondary" id="logs-download-btn" href="#" style="text-decoration:none;">⬇ Скачать</a>
+          <button type="button" class="btn-secondary" id="logs-delete-btn" style="display:none; color:var(--red);" onclick="deleteLogFile()">🗑 Удалить файл</button>
+        </div>
+        <div id="logs-stats" class="hint" style="margin-bottom:6px;"></div>
+        <div id="logs-container" style="background:var(--map-bg,#0d0d0c); border:1px solid var(--border); border-radius:var(--radius); max-height:520px; overflow-y:auto; font-family:ui-monospace,'SF Mono',Consolas,monospace;"></div>
+      </div>
+      </div>
+
       <!-- ПРОФИЛЬ -->
       <div class="settings-subtab hidden" data-settings-panel="profile">
       <h2>Смена пароля</h2>
@@ -1102,6 +1140,19 @@
         </div>
 
       </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<div id="confirm-dialog-overlay" class="hidden">
+  <div id="confirm-dialog">
+    <h3 id="confirm-dialog-title"></h3>
+    <p id="confirm-dialog-text"></p>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="confirm-dialog-cancel">Отмена</button>
+      <button type="button" id="confirm-dialog-ok">Удалить</button>
     </div>
   </div>
 </div>
