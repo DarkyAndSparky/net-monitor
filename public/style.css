@@ -106,6 +106,34 @@ nav{display:flex; flex-direction:column; gap:2px;}
 .sidebar-footer{margin-top:auto; font-size:12px; color:var(--text-dim); padding:0 8px;}
 
 /* ════════════════════════════════
+   МОБИЛЬНАЯ АДАПТАЦИЯ (≤768px)
+════════════════════════════════ */
+.mobile-menu-btn{display:none;}
+.mobile-sidebar-overlay{display:none;}
+
+@media (max-width: 768px) {
+  .app{position:relative;}
+  .mobile-menu-btn{
+    display:flex; align-items:center; justify-content:center;
+    position:fixed; top:12px; left:12px; z-index:210;
+    width:38px; height:38px; border-radius:var(--radius);
+    background:var(--panel); border:1px solid var(--border); color:var(--text);
+    font-size:18px; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.15);
+  }
+  .sidebar{
+    position:fixed; top:0; left:0; bottom:0; z-index:201;
+    transform:translateX(-100%); transition:transform .2s ease;
+    width:250px; box-shadow:2px 0 12px rgba(0,0,0,.25);
+  }
+  .sidebar.mobile-open{transform:translateX(0);}
+  .mobile-sidebar-overlay.mobile-open{
+    display:block; position:fixed; inset:0; z-index:200;
+    background:rgba(0,0,0,.45);
+  }
+  .content{padding:60px 16px 28px;}
+}
+
+/* ════════════════════════════════
    CONTENT
 ════════════════════════════════ */
 .content{flex:1; padding:28px 32px; overflow-x:auto;}
@@ -325,8 +353,8 @@ tbody tr:hover{background:var(--panel-2);}
 .btn-secondary.active{background:var(--accent); color:white; border-color:var(--accent);}
 .map-edge .edge-hit:hover{stroke:rgba(96,165,250,0.15) !important;}
 body.role-viewer .admin-only{display:none !important;}
-body.role-operator .admin-strict{display:none !important;}
-body.role-viewer .admin-strict{display:none !important;}
+body.role-operator .strict-admin-only{display:none !important;}
+body.role-viewer .strict-admin-only{display:none !important;}
 .admin-hide-only{display:none; font-size:12px; color:var(--text-dim);}
 body.role-viewer .admin-hide-only{display:inline;}
 .role-badge{font-size:11px; padding:2px 8px; border-radius:10px; background:var(--panel-2); color:var(--text-dim); margin-left:6px;}

@@ -42,7 +42,9 @@
 </div>
 
 <div class="app hidden" id="app-root">
-  <aside class="sidebar">
+  <button class="mobile-menu-btn" id="mobile-menu-btn" aria-label="Открыть меню" title="Меню">☰</button>
+  <div class="mobile-sidebar-overlay" id="mobile-sidebar-overlay"></div>
+  <aside class="sidebar" id="app-sidebar">
     <div class="logo"><img id="sidebar-logo" src="/api/branding/logo" alt="" style="height:24px; vertical-align:middle; margin-right:8px;"><span id="sidebar-app-name">NetMonitor</span></div>
     <nav>
       <button class="nav-btn active" data-tab="dashboard">📊 Дешборд</button>
@@ -223,9 +225,9 @@
           <button class="btn-secondary" id="tree-view-btn">🌳 Дерево</button>
           <button class="btn-secondary hidden" id="tree-orientation-btn" title="Сменить ориентацию дерева">⇄ Горизонтально</button>
           <div class="view-toggle">
-            <button id="zoom-out-btn" title="Уменьшить">−</button>
-            <button id="zoom-fit-btn" title="Уместить всё">⛶</button>
-            <button id="zoom-in-btn" title="Увеличить">+</button>
+            <button id="zoom-out-btn" title="Уменьшить" aria-label="Уменьшить масштаб">−</button>
+            <button id="zoom-fit-btn" title="Уместить всё" aria-label="Уместить карту целиком">⛶</button>
+            <button id="zoom-in-btn" title="Увеличить" aria-label="Увеличить масштаб">+</button>
           </div>
         </div>
       </div>
@@ -401,15 +403,15 @@
         <button class="settings-tab-btn admin-only" data-settings-tab="mikrotik">🔌 Интеграции</button>
         <button class="settings-tab-btn admin-only" data-settings-tab="categories">🏷 Категории</button>
         <button class="settings-tab-btn admin-only" data-settings-tab="sites">🏢 Площадки</button>
-        <button class="settings-tab-btn admin-only" data-settings-tab="users">👥 Пользователи</button>
+        <button class="settings-tab-btn admin-only strict-admin-only" data-settings-tab="users">👥 Пользователи</button>
         <button class="settings-tab-btn admin-only" data-settings-tab="features">🧩 Функции</button>
-        <button class="settings-tab-btn admin-only" data-settings-tab="io">⇅ Импорт/Экспорт</button>
-        <button class="settings-tab-btn admin-only" data-settings-tab="audit">📜 Аудит-лог</button>
-        <button class="settings-tab-btn admin-only" data-settings-tab="event-webhook">🪝 Webhook-события</button>
-        <button class="settings-tab-btn admin-only" data-settings-tab="ldap">🔐 LDAP/AD</button>
-        <button class="settings-tab-btn admin-only" data-settings-tab="logs">📋 Логи</button>
+        <button class="settings-tab-btn admin-only strict-admin-only" data-settings-tab="io">⇅ Импорт/Экспорт</button>
+        <button class="settings-tab-btn admin-only strict-admin-only" data-settings-tab="audit">📜 Аудит-лог</button>
+        <button class="settings-tab-btn admin-only strict-admin-only" data-settings-tab="event-webhook">🪝 Webhook-события</button>
+        <button class="settings-tab-btn admin-only strict-admin-only" data-settings-tab="ldap">🔐 LDAP/AD</button>
+        <button class="settings-tab-btn admin-only strict-admin-only" data-settings-tab="logs">📋 Логи</button>
         <button class="settings-tab-btn" data-settings-tab="profile">🔑 Профиль</button>
-        <button class="settings-tab-btn admin-strict" data-settings-tab="about">ℹ О системе</button>
+        <button class="settings-tab-btn strict-admin-only" data-settings-tab="about">ℹ О системе</button>
       </div>
 
       <!-- ВНЕШНИЙ ВИД -->

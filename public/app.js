@@ -565,10 +565,10 @@ function renderDevices() {
       <td><span class="cat-badge" style="background:${esc(c.color)}22;color:${esc(c.color)}">${esc(c.name)}</span></td>
       <td>${esc(d.comment)}</td>
       <td class="row-actions admin-only">
-        <button onclick="openDeviceDetail('${d.id}')" title="Подробнее">🔍</button>
-        <button onclick="openEdit('${d.id}')">✎</button>
-        <button onclick="duplicateDevice('${d.id}')" title="Дублировать">⧉</button>
-        <button onclick="deleteDevice('${d.id}')">🗑</button>
+        <button onclick="openDeviceDetail('${d.id}')" title="Подробнее" aria-label="Подробнее">🔍</button>
+        <button onclick="openEdit('${d.id}')" title="Редактировать" aria-label="Редактировать">✎</button>
+        <button onclick="duplicateDevice('${d.id}')" title="Дублировать" aria-label="Дублировать">⧉</button>
+        <button onclick="deleteDevice('${d.id}')" title="Удалить" aria-label="Удалить">🗑</button>
       </td>
     </tr>`;
   }).join('');
@@ -641,7 +641,8 @@ document.getElementById('bulk-clear-selection').addEventListener('click', () => 
 document.getElementById('bulk-delete-btn').addEventListener('click', async () => {
   const ids = [...SELECTED_DEVICE_IDS];
   if (!ids.length) return;
-  if (!confirm(`Удалить выбранные устройства (${ids.length} шт.)? Действие необратимо.`)) return;
+  const ok = await showConfirm(`Удалить выбранные устройства (${ids.length} шт.)?`, 'Действие необратимо.');
+  if (!ok) return;
   await api('/api/devices/bulk-delete', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids })
   });
@@ -1169,7 +1170,8 @@ function attachMapInteractions(svg) {
         e.stopPropagation();
         const edgeId = hit.closest('.map-edge').dataset.edgeId;
         if (!edgeId) return; // связь из условной «звезды» — нечего удалять, она не хранится
-        if (!confirm('Удалить эту связь?')) return;
+        const ok = await showConfirm('Удалить эту связь?');
+        if (!ok) return;
         await api(`/api/topology/edges/${edgeId}`, { method: 'DELETE' });
         TOPOLOGY = await api('/api/topology').then(r => r.json());
         renderMap();
@@ -1295,7 +1297,7 @@ function renderSubnetRulesTable() {
       <td><input type="text" class="sr-cidr" value="${esc(r.cidr)}" placeholder="10.7.7.0/24" style="width:130px;"></td>
       <td><input type="text" class="sr-label" value="${esc(r.label)}" placeholder="Wi-Fi клиенты" style="width:150px;"></td>
       <td><input type="color" class="sr-color" value="${r.color}"></td>
-      <td><button class="small-btn sr-remove">✕</button></td>
+      <td><button class="small-btn sr-remove" title="Удалить правило" aria-label="Удалить правило">✕</button></td>
     </tr>`).join('');
   tbody.querySelectorAll('.sr-remove').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1440,7 +1442,8 @@ function toggleIntervalVisibility() {
 document.getElementById('f-monitored').addEventListener('change', toggleIntervalVisibility);
 
 async function deleteDevice(id) {
-  if (!confirm('Удалить устройство?')) return;
+  const ok = await showConfirm('Удалить устройство?', 'Действие необратимо.');
+  if (!ok) return;
   await api(`/api/devices/${id}`, { method: 'DELETE' });
   await loadAll();
 }
@@ -1496,17 +1499,23 @@ document.getElementById('device-form').addEventListener('submit', async (e) => {
       .split(',').map(s => s.trim()).filter(Boolean)
       .map(port => ({ port: Number(port), label: '' }))
   };
-  if (editingId) {
-    await api(`/api/devices/${editingId}`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
-    });
-  } else {
-    await api('/api/devices', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
-    });
+  const btn = e.target.querySelector('button[type="submit"]');
+  const restore = btnLoading(btn);
+  try {
+    if (editingId) {
+      await api(`/api/devices/${editingId}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+      });
+    } else {
+      await api('/api/devices', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+      });
+    }
+    document.getElementById('device-modal').classList.add('hidden');
+    await loadAll();
+  } finally {
+    restore();
   }
-  document.getElementById('device-modal').classList.add('hidden');
-  await loadAll();
 });
 
 document.getElementById('cancel-btn').addEventListener('click', () => {
@@ -1657,7 +1666,8 @@ document.getElementById('mon-add-all').addEventListener('click', async () => {
 });
 
 document.getElementById('mon-remove-all').addEventListener('click', async () => {
-  if (!confirm('Выключить мониторинг для всех устройств?')) return;
+  const ok = await showConfirm('Выключить мониторинг для всех устройств?', 'Проверки доступности остановятся для всех устройств разом.');
+  if (!ok) return;
   await api('/api/monitoring/bulk', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ids: DEVICES.map(d => d.id), monitored: false })
@@ -1802,7 +1812,7 @@ document.getElementById('neighbors-btn').addEventListener('click', () => runMikr
     <td>${esc(r.mac)}</td>
     <td>${esc(r.interface)}</td>
     <td>${r.existingDeviceId ? `<span class="status-badge status-online">${esc(r.existingDeviceName)}</span>` : '<span class="status-badge status-unknown">Новое</span>'}</td>
-    <td>${r.existingDeviceId ? '' : `<button class="small-btn" disabled title="Добавляется автоматически при построении топологии">—</button>`}</td>
+    <td>${r.existingDeviceId ? '' : `<button class="small-btn" disabled title="Добавляется автоматически при построении топологии" aria-label="Добавляется автоматически при построении топологии">—</button>`}</td>
   </tr>`));
 
 document.getElementById('mt-add-selected').addEventListener('click', async () => {
@@ -2310,7 +2320,7 @@ function renderCategoriesTable() {
     <tr data-idx="${i}" data-id="${esc(c.id)}">
       <td><input type="text" class="cat-name" value="${esc(c.name)}"></td>
       <td><input type="color" class="cat-color" value="${esc(c.color)}"></td>
-      <td><button class="small-btn cat-remove">✕</button></td>
+      <td><button class="small-btn cat-remove" title="Удалить категорию" aria-label="Удалить категорию">✕</button></td>
     </tr>`).join('');
   tbody.querySelectorAll('.cat-remove').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -2356,7 +2366,7 @@ function renderSitesTable() {
       <td><input type="text" class="site-name" value="${esc(s.name)}"></td>
       <td><input type="text" class="site-address" value="${esc(s.address || '')}" placeholder="г. Москва, ул. ..."></td>
       <td><input type="color" class="site-color" value="${esc(s.color)}"></td>
-      <td><button class="small-btn site-remove">✕</button></td>
+      <td><button class="small-btn site-remove" title="Удалить площадку" aria-label="Удалить площадку">✕</button></td>
     </tr>`).join('');
   tbody.querySelectorAll('.site-remove').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -2437,8 +2447,8 @@ async function loadConnections() {
         <td>${esc(c.user || '')}</td>
         <td class="row-actions admin-only">
           <button class="small-btn conn-import-btn" data-id="${esc(c.id)}" data-type="${c.type}">Импортировать</button>
-          <button class="small-btn conn-edit-btn" data-id="${esc(c.id)}" data-type="${c.type}" title="Редактировать">✏</button>
-          <button class="conn-delete-btn" data-id="${esc(c.id)}" data-type="${c.type}" title="Удалить">🗑</button>
+          <button class="small-btn conn-edit-btn" data-id="${esc(c.id)}" data-type="${c.type}" title="Редактировать" aria-label="Редактировать">✏</button>
+          <button class="conn-delete-btn" data-id="${esc(c.id)}" data-type="${c.type}" title="Удалить" aria-label="Удалить">🗑</button>
         </td>
       </tr>`).join('') : `<tr><td colspan="6" class="hint">Подключений ещё не добавлено</td></tr>`;
 
@@ -2499,18 +2509,19 @@ async function importConnection(type, id, btn) {
   try {
     const res = await api(`${CONN_TYPE_ENDPOINTS[type]}/${id}/import`, { method: 'POST' });
     const data = await res.json();
-    if (!res.ok) { alert('Ошибка: ' + (data.message || data.error)); return; }
-    alert(`Готово: найдено ${data.total}, создано ${data.created}, обновлено ${data.updated}.`);
+    if (!res.ok) { toast('Ошибка: ' + (data.message || data.error), 'error'); return; }
+    toast(`Готово: найдено ${data.total}, создано ${data.created}, обновлено ${data.updated}.`, 'success');
     await loadAll();
   } catch (e) {
-    alert('Ошибка соединения с сервером.');
+    toast('Ошибка соединения с сервером.', 'error');
   } finally {
     btn.disabled = false; btn.textContent = original;
   }
 }
 
 async function deleteConnection(type, id) {
-  if (!confirm('Удалить это подключение из списка?')) return;
+  const ok = await showConfirm('Удалить это подключение из списка?');
+  if (!ok) return;
   await api(`${CONN_TYPE_ENDPOINTS[type]}/${id}`, { method: 'DELETE' });
   await loadConnections();
 }
@@ -2702,7 +2713,25 @@ document.getElementById('password-form').addEventListener('submit', async (e) =>
 
 // ---------------- NAV / TABS ----------------
 document.querySelectorAll('.nav-btn').forEach(btn => {
-  btn.addEventListener('click', () => showTab(btn.dataset.tab));
+  btn.addEventListener('click', () => {
+    showTab(btn.dataset.tab);
+    closeMobileSidebar(); // выбрали раздел — закрываем меню, чтобы сразу видеть контент
+  });
+});
+
+// ---------------- МОБИЛЬНОЕ МЕНЮ (off-canvas sidebar) ----------------
+function openMobileSidebar() {
+  document.getElementById('app-sidebar').classList.add('mobile-open');
+  document.getElementById('mobile-sidebar-overlay').classList.add('mobile-open');
+}
+function closeMobileSidebar() {
+  document.getElementById('app-sidebar').classList.remove('mobile-open');
+  document.getElementById('mobile-sidebar-overlay').classList.remove('mobile-open');
+}
+document.getElementById('mobile-menu-btn').addEventListener('click', openMobileSidebar);
+document.getElementById('mobile-sidebar-overlay').addEventListener('click', closeMobileSidebar);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeMobileSidebar();
 });
 
 // ---------------- FILTERS / VIEW TOGGLE ----------------
@@ -2744,7 +2773,7 @@ async function loadUsers() {
             <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Администратор</option>
           </select>
         </td>
-        <td>${u.username === meRes.username ? '' : `<button onclick="deleteUser('${esc(u.username)}')">🗑</button>`}</td>
+        <td>${u.username === meRes.username ? '' : `<button onclick="deleteUser('${esc(u.username)}')" title="Удалить пользователя" aria-label="Удалить пользователя">🗑</button>`}</td>
       </tr>`).join('');
 
     document.querySelectorAll('.role-select').forEach(sel => {
@@ -2767,19 +2796,25 @@ async function loadUsers() {
 document.getElementById('user-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const resultBox = document.getElementById('user-result');
-  const res = await api('/api/users', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      username: document.getElementById('u-username').value,
-      password: document.getElementById('u-password').value,
-      role: document.getElementById('u-role').value
-    })
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) { resultBox.textContent = 'Ошибка: ' + (data.message || data.error); return; }
-  resultBox.textContent = 'Пользователь добавлен.';
-  document.getElementById('user-form').reset();
-  await loadUsers();
+  const btn = e.target.querySelector('button[type="submit"]');
+  const restore = btnLoading(btn);
+  try {
+    const res = await api('/api/users', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: document.getElementById('u-username').value,
+        password: document.getElementById('u-password').value,
+        role: document.getElementById('u-role').value
+      })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { resultBox.textContent = 'Ошибка: ' + (data.message || data.error); return; }
+    resultBox.textContent = 'Пользователь добавлен.';
+    document.getElementById('user-form').reset();
+    await loadUsers();
+  } finally {
+    restore();
+  }
 });
 
 async function deleteUser(username) {
@@ -2821,7 +2856,12 @@ document.getElementById('backup-restore-btn').addEventListener('click', async ()
   const resultBox = document.getElementById('backup-restore-result');
   const file = fileInput.files[0];
   if (!file) { resultBox.textContent = 'Выберите файл бэкапа.'; return; }
-  if (!confirm('Восстановление ПОЛНОСТЬЮ заменит текущие данные содержимым файла. Действие необратимо. Продолжить?')) return;
+  const ok = await showConfirm(
+    'Восстановить из бэкапа?',
+    'Это ПОЛНОСТЬЮ заменит текущие данные содержимым файла. Действие необратимо.',
+    { okLabel: 'Да, заменить всё', okClass: 'btn-primary' }
+  );
+  if (!ok) return;
 
   resultBox.textContent = 'Читаю файл...';
   try {
@@ -2981,7 +3021,7 @@ function ldapRuleRow(rule = { group: '', role: 'viewer' }) {
       <option value="operator">Оператор</option>
       <option value="viewer">Наблюдатель</option>
     </select>
-    <button type="button" class="small-btn ldap-rule-remove" title="Удалить правило">✕</button>
+    <button type="button" class="small-btn ldap-rule-remove" title="Удалить правило" aria-label="Удалить правило">✕</button>
   `;
   div.querySelector('.ldap-rule-role').value = rule.role;
   div.querySelector('.ldap-rule-remove').addEventListener('click', () => div.remove());
