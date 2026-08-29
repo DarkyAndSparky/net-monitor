@@ -8,12 +8,15 @@
  */
 const log = require('./logger');
 const { getSetting } = require('../db');
+const { checkWebhookUrl } = require('./urlGuard');
 
 async function fireEvent(action, details, meta) {
   let cfg;
   try { cfg = getSetting('eventWebhook') || {}; } catch { return; }
   if (!cfg.enabled || !cfg.url) return;
   if (Array.isArray(cfg.events) && cfg.events.length && !cfg.events.includes(action)) return;
+  const blocked = checkWebhookUrl(cfg.url);
+  if (blocked) { log.warn({ url: cfg.url, reason: blocked }, 'Event webhook blocked by SSRF guard'); return; }
 
   const payload = {
     event: action,

@@ -89,7 +89,21 @@ router.post('/branding/logo', requireAdmin, (req, res) => {
   const ext=LOGO_MIME[m[1]]; if (!ext) return res.status(400).json({error:'unsupported_type'});
   const buf=Buffer.from(m[2],'base64');
   if (buf.length>1024*1024) return res.status(400).json({error:'too_large'});
-  if (ext==='svg'&&(/<script/i.test(buf.toString())||/on[a-z]+\s*=/i.test(buf.toString()))) return res.status(400).json({error:'unsafe_svg'});
+  if (ext==='svg') {
+    const svgText = buf.toString('utf8');
+    // Логотип отдаётся публично без авторизации (GET /api/branding/logo — виден даже
+    // на экране логина неаутентифицированным посетителям), поэтому XSS через SVG здесь
+    // затрагивает не только загрузившего его admin, а любого, кто откроет страницу.
+    const dangerousPatterns = [
+      /<script/i,                    // прямой скрипт
+      /on[a-z]+\s*=/i,                // обработчики событий (onload, onclick, ...)
+      /javascript\s*:/i,              // javascript: URI — в href/xlink:href обходит оба правила выше
+      /<foreignObject/i,              // встраивание произвольного HTML внутрь SVG
+      /<(animate|set|animateMotion|animateTransform)\b/i, // SMIL-анимация может подменить href на javascript: в рантайме
+      /data\s*:\s*text\/html/i,       // вложенный HTML-документ через data: URI
+    ];
+    if (dangerousPatterns.some(re => re.test(svgText))) return res.status(400).json({error:'unsafe_svg'});
+  }
   if (!fs.existsSync(BRANDING_DIR)) fs.mkdirSync(BRANDING_DIR,{recursive:true});
   Object.values(LOGO_MIME).forEach(e=>{const p=path.join(BRANDING_DIR,`logo.${e}`);if(fs.existsSync(p))fs.unlinkSync(p);});
   fs.writeFileSync(path.join(BRANDING_DIR,`logo.${ext}`),buf);

@@ -11,7 +11,37 @@ Versioning: [Semantic Versioning](https://semver.org/)
 ### Planned
 - NetBox synchronization (IPAM)
 - LLDP/CDP парсинг проверен только против тестовых данных — нужна валидация на реальном разнородном оборудовании
-- Скриншоты / GIF в README, GitHub Pages для `docs/`
+- Скриншоты / GIF в README
+
+---
+
+## [26w35-b01] — 2026-08-28
+
+### Added
+- `scripts/sync-version.js` — `package.json` теперь единственный источник истины для версии.
+  `server.js` уже читал её оттуда динамически в рантайме; скрипт синхронизирует статические файлы
+  (`docs/index.html`), которые не могут прочитать её сами. Запуск: `npm run version:sync`, либо
+  автоматически через `postversion`-хук при `npm version <bump>`
+- GitHub Pages для `docs/` — `.github/workflows/pages.yml`, официальный Actions-based деплой
+- Mobile-адаптивность — off-canvas sidebar с гамбургер-меню (≤768px)
+- `aria-label` на 14 icon-only кнопках по всему интерфейсу
+
+### Fixed — Security (pentest-раунд)
+- **SSRF** через webhook/ntfy URL — не было защиты вообще; добавлен `src/services/urlGuard.js`
+  (блокирует link-local/cloud-metadata диапазон и не-http(s) схемы, сознательно не трогает
+  приватные LAN-адреса — легитимный self-hosted юзкейс)
+- **SVG XSS** через логотип — старый blacklist обходился 4 способами (`javascript:` в
+  `xlink:href`, SMIL-анимация, `foreignObject`, вложенный `data:text/html`); impact шире
+  ожидаемого — логотип отдаётся без авторизации, видим на странице логина
+- **Timing-based user enumeration** — несуществующий username отвечал ~7мс, существующий —
+  ~50мс (реальный scrypt); добавлен constant-time padding
+- **Information disclosure** — не было global error handler (риск утечки stack trace) и явного
+  JSON 404 для `/api/*`; заодно отключён заголовок `X-Powered-By`
+
+### Fixed — UI/UX
+- 6 мест использовали голый `confirm()`, 3 — `alert()`, вместо стилизованных `showConfirm()`/
+  `toast()` — включая восстановление бэкапа (самая опасная операция в приложении)
+- Защита от двойного клика на формах создания/редактирования устройства и пользователя
 
 ---
 

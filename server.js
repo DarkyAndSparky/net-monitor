@@ -16,6 +16,7 @@ require('./src/services/scheduler');
 const log = require('./src/services/logger');
 const { requireAdmin } = require('./src/middleware/auth');
 const app = express();
+app.disable('x-powered-by'); // не светим технологический стек в заголовках ответа
 
 // ── Порты: HTTPS 9221, HTTP→HTTPS редирект 9222 ──────────────────────
 const HTTPS_PORT    = Number(process.env.PORT)         || 9221;
@@ -223,6 +224,22 @@ app.use('/api/traffic',      require('./src/routes/traffic'));
 app.use('/api',              require('./src/routes/agent'));
 app.use('/api',              require('./src/routes/logs'));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// 404 для несуществующих API-путей — JSON, а не дефолтная HTML-страница Express
+// (та в своей разметке светит версию Express, никому не нужная деталь)
+app.use('/api', (req, res) => res.status(404).json({ error: 'not_found' }));
+
+// Единый обработчик ошибок — обязательно последним. Полная ошибка идёт в лог
+// сервера (pino), клиенту — только generic-сообщение. Без этого необработанное
+// исключение в синхронном route-хендлере ушло бы через дефолтный Express
+// error handler, который при NODE_ENV, отличном от 'production' (а она нигде
+// не форсируется явно в стартовых скриптах этого проекта), отдаёт клиенту
+// полный stack trace — пути на сервере, версии пакетов и т.д.
+app.use((err, req, res, next) => {
+  log.error({ err, method: req.method, url: req.originalUrl }, 'Unhandled error');
+  if (res.headersSent) return next(err);
+  res.status(err.status || 500).json({ error: 'internal_error' });
+});
 
 // ── Определяем локальный IP ───────────────────────────────────────────
 function getLocalIP() {

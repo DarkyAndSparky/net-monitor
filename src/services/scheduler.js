@@ -192,10 +192,14 @@ async function sendTelegram(cfg, text) {
 }
 async function sendWebhook(cfg, payload) {
   if (!cfg.webhook?.enabled||!cfg.webhook.url) return;
+  const blocked = require('./urlGuard').checkWebhookUrl(cfg.webhook.url);
+  if (blocked) { log.warn({ url: cfg.webhook.url, reason: blocked }, 'Webhook alert blocked by SSRF guard'); return; }
   try { await fetch(cfg.webhook.url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); } catch(e){ log.error({ err: e }, 'Webhook alert failed'); }
 }
 async function sendNtfy(cfg, text, status) {
   if (!cfg.ntfy?.enabled||!cfg.ntfy.url) return;
+  const blocked = require('./urlGuard').checkWebhookUrl(cfg.ntfy.url);
+  if (blocked) { log.warn({ url: cfg.ntfy.url, reason: blocked }, 'Ntfy alert blocked by SSRF guard'); return; }
   try {
     const plain = text.replace(/<\/?b>/g,'').replace(/\\n/g,'\n');
     const base = cfg.ntfy.url.replace(/\/+$/,'');

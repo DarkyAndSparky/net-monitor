@@ -11,6 +11,14 @@ const LOGIN_LOCKOUT_MS    = 5 * 60 * 1000;
 const VALID_ROLES         = ['admin', 'operator', 'viewer'];
 const loginAttempts       = {};
 
+// Timing-attack защита: scrypt-проверка пароля занимает заметное время (~десятки мс),
+// а "юзера не существует" / "LDAP выключен" раньше возвращали 401 почти мгновенно —
+// разница во времени ответа позволяла статистически определить, какие username
+// существуют в системе, даже при одинаковом HTTP-ответе. Прогоняем через тот же
+// scrypt на фиктивных данных в "быстрых" ветках, чтобы время ответа не отличалось.
+const { salt: DUMMY_SALT, hash: DUMMY_HASH } = hashPassword('dummy-password-for-timing-padding');
+function timingPad(password) { verifyPassword(password || '', DUMMY_SALT, DUMMY_HASH); }
+
 function isLockedOut(ip) { const r = loginAttempts[ip]; return r?.lockedUntil > Date.now(); }
 function registerFail(ip) {
   const r = loginAttempts[ip] || { count: 0, lockedUntil: 0 };
@@ -28,6 +36,7 @@ router.post('/login', async (req, res) => {
     }
     const { username, password } = req.body || {};
     if (!username || typeof username !== 'string') {
+      timingPad(password);
       registerFail(ip); return res.status(401).json({ error: 'invalid_credentials' });
     }
     let user = db.prepare('SELECT * FROM users WHERE username=?').get(username);
@@ -41,6 +50,7 @@ router.post('/login', async (req, res) => {
       // Нет локального пользователя (или он привязан к LDAP) — пробуем LDAP, если он включён
       const ldapCfg = getSetting('ldap') || {};
       if (!ldapCfg.enabled) {
+        timingPad(password); // юзера нет и LDAP не спросишь — тратим то же время, что ушло бы на verifyPassword
         registerFail(ip); return res.status(401).json({ error: 'invalid_credentials' });
       }
       const { authenticate } = require('../services/ldap');

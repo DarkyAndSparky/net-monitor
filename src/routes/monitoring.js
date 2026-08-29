@@ -86,6 +86,15 @@ router.post('/alert-settings', requireOperator, (req, res) => {
     },
     escalation:{ enabled:inc.escalation?.enabled!==undefined?!!inc.escalation.enabled:!!prev.escalation?.enabled, afterMinutes:Math.max(5,Number(inc.escalation?.afterMinutes)||prev.escalation?.afterMinutes||60), telegramChatId:inc.escalation?.telegramChatId??prev.escalation?.telegramChatId??'' }
   };
+  const { checkWebhookUrl } = require('../services/urlGuard');
+  if (cfg.webhook.enabled && cfg.webhook.url) {
+    const bad = checkWebhookUrl(cfg.webhook.url);
+    if (bad) return res.status(400).json({ error:'invalid_webhook_url', message:bad });
+  }
+  if (cfg.ntfy.enabled && cfg.ntfy.url) {
+    const bad = checkWebhookUrl(cfg.ntfy.url);
+    if (bad) return res.status(400).json({ error:'invalid_ntfy_url', message:bad });
+  }
   require('../db').setSetting('alerting',cfg);
   logAudit(req,'alert_settings.update','');
   res.json({ ok:true });
@@ -114,6 +123,10 @@ router.post('/event-webhook', requireAdmin, (req, res) => {
     events:Array.isArray(inc.events)?inc.events.filter(a=>typeof a==='string'):(prev.events||[]),
     secret:(inc.secret&&inc.secret!=='••••••••')?inc.secret:(prev.secret||'')
   };
+  if (cfg.enabled && cfg.url) {
+    const bad = require('../services/urlGuard').checkWebhookUrl(cfg.url);
+    if (bad) return res.status(400).json({ error:'invalid_url', message:bad });
+  }
   require('../db').setSetting('eventWebhook',cfg);
   logAudit(req,'event_webhook.update','');
   res.json({ ok:true });
