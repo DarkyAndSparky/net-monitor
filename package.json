@@ -1,6 +1,6 @@
 {
   "name": "net-monitor",
-  "version": "26w35-b01",
+  "version": "26w35-b02",
   "description": "Self-hosted network monitoring dashboard — devices, map, ping, SNMP, MikroTik, alerts",
   "main": "server.js",
   "engines": {

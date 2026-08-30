@@ -18,7 +18,14 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 const DB_DIR = path.dirname(DB_PATH);
 if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
 
+// Ограничиваем права по умолчанию для файлов, которые SQLite создаст сам
+// (WAL/SHM-файлы появляются позже, при первой записи в WAL-режиме — их не
+// поймать разовым chmodSync). Безопасно вызывать повторно, если это уже
+// сделал server.js — идемпотентно.
+process.umask(0o077);
+
 const db = new DatabaseSync(DB_PATH);
+try { fs.chmodSync(DB_PATH, 0o600); } catch { /* не критично, если недоступно (напр. read-only FS) */ }
 
 // Эмулируем .pragma() через exec
 db.pragma = (str) => db.exec(`PRAGMA ${str}`);

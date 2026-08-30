@@ -1,5 +1,12 @@
 'use strict';
 
+// Ограничиваем права по умолчанию для ВСЕХ файлов, создаваемых этим процессом
+// (БД со всеми секретами внутри — password-хеши, LDAP/SMTP пароли, Telegram
+// bot token; WAL/SHM-файлы SQLite; логи; session-secret) — только владелец
+// читает/пишет, group/other доступа нет. Должно идти раньше любого require,
+// который может создать файл.
+process.umask(0o077);
+
 const express  = require('express');
 const session  = require('express-session');
 const fs       = require('fs');
@@ -14,6 +21,20 @@ const { db } = require('./src/db');
 require('./src/services/scheduler');
 
 const log = require('./src/services/logger');
+
+// Без этих двух обработчиков одно необработанное исключение в ЛЮБОМ из
+// десятков async route-хендлеров уронило бы весь процесс целиком (дефолтное
+// поведение Node 15+ для unhandled promise rejection — process.exit(1)) —
+// не один запрос, а простой сервиса для всех подключённых пользователей.
+// Логируем и продолжаем работу: для stateless HTTP-сервера пережить один
+// плохой запрос лучше, чем полный даунтайм из-за него.
+process.on('unhandledRejection', (reason) => {
+  log.error({ err: reason }, 'Unhandled promise rejection — процесс продолжает работу');
+});
+process.on('uncaughtException', (err) => {
+  log.error({ err }, 'Uncaught exception — процесс продолжает работу');
+});
+
 const { requireAdmin } = require('./src/middleware/auth');
 const app = express();
 app.disable('x-powered-by'); // не светим технологический стек в заголовках ответа
