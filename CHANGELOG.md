@@ -12,6 +12,23 @@ Versioning: [Semantic Versioning](https://semver.org/)
 - NetBox synchronization (IPAM)
 - LLDP/CDP парсинг проверен только против тестовых данных — нужна валидация на реальном разнородном оборудовании
 - Скриншоты / GIF в README
+- Playwright e2e-тесты, `zod`-валидация, repository pattern, pre-commit hook — см.
+  `netmonitor-roadmap.md`, раздел «Практики для переноса из it-assets / procure-it»
+
+---
+
+## [26w35-b03] — 2026-09-01
+
+### Added
+- `.github/workflows/ci.yml` — синтаксис-чек проекта + inline-скриптов + полный тест-сьют,
+  matrix на обе LTS-линии (22.x/24.x)
+- `scripts/check-syntax.js`, `scripts/check-inline-scripts.js` — переиспользуемые проверки
+  (доступны локально через `npm run check:syntax` / `check:inline-scripts`, не только в CI)
+- `helmet` — полный набор security-заголовков вместо кастомного middleware на 3-4 заголовка;
+  CSP явно отключён (сломал бы ~300 мест с inline onclick=/style= в текущем UI — отдельный
+  будущий пункт), `X-Frame-Options: DENY` сохранён явно (helmet-дефолт мягче), HSTS условный
+  на реальный HTTPS
+- `compression` — gzip/brotli для HTTP-ответов, подтверждено реальным тестом
 
 ---
 

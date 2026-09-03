@@ -1,6 +1,6 @@
 {
   "name": "net-monitor",
-  "version": "26w35-b02",
+  "version": "26w35-b03",
   "description": "Self-hosted network monitoring dashboard — devices, map, ping, SNMP, MikroTik, alerts",
   "main": "server.js",
   "engines": {
@@ -10,12 +10,16 @@
     "start": "node server.js",
     "test": "node --test --test-force-exit",
     "version:sync": "node scripts/sync-version.js",
+    "check:syntax": "node scripts/check-syntax.js",
+    "check:inline-scripts": "node scripts/check-inline-scripts.js",
     "postversion": "node scripts/sync-version.js"
   },
   "dependencies": {
+    "compression": "^1.8.1",
     "express": "^4.19.2",
     "express-rate-limit": "^7.4.0",
     "express-session": "^1.18.0",
+    "helmet": "^8.3.0",
     "ldapts": "^9.0.0",
     "net-snmp": "^3.0.0",
     "node-routeros": "^1.6.9",

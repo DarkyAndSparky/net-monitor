@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Обе LTS-линии, разрешённые в package.json engines — проверяем реально
+        # обе, а не полагаемся, что "работает на одной — заработает и на другой".
+        node-version: ['22', '24']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Syntax check (весь проект)
+        run: npm run check:syntax
+
+      - name: Syntax check (inline-скрипты в docs/index.html)
+        run: npm run check:inline-scripts
+
+      - name: Тесты (unit + integration)
+        run: npm test

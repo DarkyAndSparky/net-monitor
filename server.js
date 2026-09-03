@@ -9,6 +9,8 @@ process.umask(0o077);
 
 const express  = require('express');
 const session  = require('express-session');
+const helmet   = require('helmet');
+const compression = require('compression');
 const fs       = require('fs');
 const path     = require('path');
 const crypto   = require('crypto');
@@ -66,13 +68,18 @@ app.use(session({
   secret: sessionSecret, resave: false, saveUninitialized: false,
   cookie: { maxAge: 1000*60*60*12, httpOnly: true, sameSite: 'lax', secure: COOKIE_SECURE }
 }));
-app.use((req, res, next) => {
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('Referrer-Policy', 'no-referrer');
-  if (USE_HTTPS) res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
-  next();
-});
+app.use(helmet({
+  // Строгий CSP сломал бы текущий UI (~300 мест с inline onclick=/style= в public/*) —
+  // рефакторинг под CSP без unsafe-inline зафиксирован отдельным пунктом в роадмапе,
+  // не втискиваем впопыхах вместе с этим шагом.
+  contentSecurityPolicy: false,
+  // helmet default для X-Frame-Options — SAMEORIGIN; здесь был и остаётся строгий DENY
+  frameguard: { action: 'deny' },
+  // HSTS обязателен только если реально работаем по HTTPS — иначе браузер запомнит
+  // "всегда требуй HTTPS для этого домена" и сломает будущий доступ по чистому HTTP.
+  hsts: USE_HTTPS ? { maxAge: 15552000, includeSubDomains: true } : false,
+}));
+app.use(compression());
 
 // ── Health check ──────────────────────────────────────────────────────
 const APP_VERSION = (() => { try { return require('./package.json').version; } catch { return '0.0.0'; } })();
