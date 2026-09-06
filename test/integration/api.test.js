@@ -63,8 +63,16 @@ describe('NetMonitor API (интеграционные тесты через р�
     await api('/api/change-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ currentPassword: 'admin0000', newPassword: 'TestPass123456' }) });
   });
 
-  after(() => {
-    if (serverProcess) serverProcess.kill('SIGKILL');
+  after(async () => {
+    // SIGKILL не даёт V8 сбросить данные покрытия на диск (см. то же в auth.test.js) —
+    // SIGTERM + ожидание exit позволяет c8 увидеть реальное покрытие этого процесса.
+    if (serverProcess) {
+      await new Promise((resolve) => {
+        serverProcess.once('exit', resolve);
+        serverProcess.kill('SIGTERM');
+        setTimeout(() => { serverProcess.kill('SIGKILL'); resolve(); }, 5000).unref();
+      });
+    }
     try { fs.unlinkSync(tmpDb); } catch {}
     try { fs.unlinkSync(tmpDb + '-shm'); } catch {}
     try { fs.unlinkSync(tmpDb + '-wal'); } catch {}

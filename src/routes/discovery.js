@@ -36,7 +36,7 @@ router.post('/scan', requireOperator, async (req, res) => {
   if (prefix<24||prefix>30) return res.status(400).json({error:'range_too_big',message:'Поддерживается /24–/30'});
   const base=ipToInt(cidrBase(m[1],prefix)), count=Math.pow(2,32-prefix);
   const ips=[]; for(let i=1;i<count-1;i++) ips.push(intToIp(base+i));
-  const known=new Set(db.prepare('SELECT ip FROM devices WHERE ip!=""').all().map(r=>r.ip));
+  const known=new Set(db.prepare("SELECT ip FROM devices WHERE ip!=''").all().map(r=>r.ip));
   const results=[]; const CONC=16;
   for (let i=0;i<ips.length;i+=CONC) {
     const batch=ips.slice(i,i+CONC);
@@ -57,7 +57,7 @@ router.post('/add-bulk', requireOperator, (req, res) => {
   let created=0;
   db.transaction(()=>items.forEach(it=>{
     if (!it.ip&&!it.mac) return;
-    if (db.prepare('SELECT 1 FROM devices WHERE ip=? OR (mac=? AND mac!="")').get(it.ip||'_',(it.mac||'').toUpperCase())) return;
+    if (db.prepare("SELECT 1 FROM devices WHERE ip=? OR (mac=? AND mac!='')").get(it.ip||'_',(it.mac||'').toUpperCase())) return;
     db.prepare(`INSERT INTO devices (id,name,ip,mac,location,type,category_id,comment,is_key,monitored,check_interval,alerts_enabled,source,x,y) VALUES (?,?,?,?,?,?,?,?,0,0,?,1,?,?,?)`).run(
       newId('d'),it.name||it.ip||'Новое устройство',it.ip||'',(it.mac||'').toUpperCase(),'',it.type||'',it.category||'other',
       'Добавлено через обнаружение сети',DEFAULT_INT,it.source||'discovery',100+Math.random()*800,100+Math.random()*500
@@ -177,7 +177,7 @@ router.post('/topology/build/:routerId', requireOperator, async (req, res) => {
 
     const findOrCreate=(mac,ip,name,type)=>{
       mac=(mac||'').toUpperCase();
-      let d=db.prepare('SELECT * FROM devices WHERE (mac=? AND mac!="") OR (ip=? AND ip!="")').get(mac,ip);
+      let d=db.prepare("SELECT * FROM devices WHERE (mac=? AND mac!='') OR (ip=? AND ip!='')").get(mac,ip);
       if (d) return d;
       if (!ip&&!mac) return null;
       const id=newId('d');

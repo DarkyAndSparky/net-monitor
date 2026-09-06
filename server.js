@@ -329,11 +329,12 @@ function openBrowser(url) {
 
 // ── Запуск ────────────────────────────────────────────────────────────
 const localIP = getLocalIP();
+const listeningServers = []; // для graceful shutdown ниже
 
 if (USE_HTTPS) {
   const tlsOpts = { cert: fs.readFileSync(CERT_FILE), key: fs.readFileSync(KEY_FILE) };
 
-  https.createServer(tlsOpts, app).listen(HTTPS_PORT, () => {
+  const mainServer = https.createServer(tlsOpts, app).listen(HTTPS_PORT, () => {
     // HTTP → HTTPS редирект
     if (REDIRECT_PORT > 0) {
       const redir = http.createServer((req, res) => {
@@ -350,16 +351,41 @@ if (USE_HTTPS) {
         log.info({ httpsPort: HTTPS_PORT, httpPort: REDIRECT_PORT }, 'NetMonitor запущен (HTTPS)');
         openBrowser(`https://localhost:${HTTPS_PORT}`);
       });
+      listeningServers.push(redir);
     } else {
       printBanner(true, HTTPS_PORT, 0, localIP);
       log.info({ httpsPort: HTTPS_PORT }, 'NetMonitor запущен (HTTPS, без редиректа)');
       openBrowser(`https://localhost:${HTTPS_PORT}`);
     }
   });
+  listeningServers.push(mainServer);
 } else {
-  app.listen(REDIRECT_PORT, () => {
+  const mainServer = app.listen(REDIRECT_PORT, () => {
     printBanner(false, 0, REDIRECT_PORT, localIP);
     log.info({ port: REDIRECT_PORT }, 'NetMonitor запущен (HTTP)');
     openBrowser(`http://localhost:${REDIRECT_PORT}`);
   });
+  listeningServers.push(mainServer);
 }
+
+// ── Graceful shutdown ────────────────────────────────────────────────
+// Раньше SIGTERM/SIGINT не были обработаны вообще — процесс убивался
+// платформой (Node) немедленно, без единого шанса закрыть слушающие
+// сокеты или соединение с БД. В проде именно SIGTERM шлют systemd
+// (systemctl stop), Docker (docker stop) и k8s при остановке пода —
+// то есть штатная остановка сервиса вела себя как аварийный краш.
+let shuttingDown = false;
+function gracefulShutdown(signal) {
+  if (shuttingDown) return; // повторный сигнал во время остановки — игнорируем
+  shuttingDown = true;
+  log.info({ signal }, 'Получен сигнал остановки — завершаем работу');
+  let pending = listeningServers.length;
+  if (pending === 0) return process.exit(0);
+  const done = () => { if (--pending <= 0) { try { db.close(); } catch { /* уже закрыта или недоступна */ } process.exit(0); } };
+  for (const s of listeningServers) s.close(done);
+  // Не ждём вечно: если какие-то keep-alive соединения не отпускают сокет,
+  // форсируем выход через 10 секунд вместо зависания процесса навсегда.
+  setTimeout(() => { log.warn('Graceful shutdown не уложился в таймаут — принудительный выход'); process.exit(0); }, 10000).unref();
+}
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

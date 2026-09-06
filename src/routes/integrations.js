@@ -122,7 +122,7 @@ async function importFromRouter(cfg) {
     leases.forEach(l=>{
       const mac=(l['mac-address']||'').toUpperCase(), ip=l.address||'', name=l['host-name']||l.comment||ip||'DHCP-клиент';
       if (!mac&&!ip) return;
-      const ex=db.prepare('SELECT * FROM devices WHERE (mac=? AND mac!="") OR ip=?').get(mac,ip);
+      const ex=db.prepare("SELECT * FROM devices WHERE (mac=? AND mac!='') OR ip=?").get(mac,ip);
       if (ex) { db.prepare('UPDATE devices SET ip=?,mac=?,updated_at=? WHERE id=?').run(ip||ex.ip,mac||ex.mac,Date.now(),ex.id); updated++; }
       else { db.prepare(`INSERT INTO devices (id,name,ip,mac,location,type,category_id,comment,is_key,monitored,check_interval,alerts_enabled,source,x,y) VALUES (?,?,?,?,?,?,?,?,0,0,?,1,?,?,?)`).run(newId('d'),name,ip,mac,'','DHCP Client','workstation',`Из MikroTik "${cfg.name}"`,DEFAULT_INT,'mikrotik:'+cfg.name,100+Math.random()*800,100+Math.random()*500); created++; }
     });
@@ -161,7 +161,7 @@ router.post('/mikrotik/routers/:id/neighbors', requireOperator, async (req,res) 
     const entries=await routerOsQuery(cfg,'/ip/neighbor/print');
     res.json({results:entries.map(e=>{
       const mac=(e['mac-address']||'').toUpperCase(), ip=e.address||'';
-      const ex=db.prepare('SELECT id,name FROM devices WHERE (mac=? AND mac!="") OR (ip=? AND ip!="")').get(mac,ip);
+      const ex=db.prepare("SELECT id,name FROM devices WHERE (mac=? AND mac!='') OR (ip=? AND ip!='')").get(mac,ip);
       return {identity:e.identity||'(без имени)',ip,mac,interface:e.interface||'',platform:e.platform||'',board:e.board||'',existingDeviceId:ex?.id||null,existingDeviceName:ex?.name||null};
     })});
   } catch(err) { res.status(500).json({error:'connection_failed',message:err.message}); }
@@ -201,7 +201,7 @@ async function importFromUnifi(ctrl) {
   db.transaction(()=>{
     const upsert=(mac,ip,name,type,comment)=>{
       if (!mac&&!ip) return; mac=(mac||'').toUpperCase();
-      const ex=db.prepare('SELECT * FROM devices WHERE (mac=? AND mac!="") OR (ip=? AND ip!="")').get(mac,ip);
+      const ex=db.prepare("SELECT * FROM devices WHERE (mac=? AND mac!='') OR (ip=? AND ip!='')").get(mac,ip);
       if (ex) { db.prepare('UPDATE devices SET ip=?,mac=?,updated_at=? WHERE id=?').run(ip||ex.ip,mac||ex.mac,Date.now(),ex.id); updated++; }
       else { db.prepare(`INSERT INTO devices (id,name,ip,mac,location,type,category_id,comment,is_key,monitored,check_interval,alerts_enabled,source,x,y) VALUES (?,?,?,?,?,?,?,?,0,0,?,1,?,?,?)`).run(newId('d'),name||ip||mac,ip||'',mac,'',type||'UniFi',['uap','usw','ugw','udm'].includes((type||'').toLowerCase())?'network':'workstation',comment||`Из UniFi "${ctrl.name}"`,DEFAULT_INT,'unifi:'+ctrl.name,100+Math.random()*800,100+Math.random()*500); created++; }
     };

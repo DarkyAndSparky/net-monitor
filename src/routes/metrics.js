@@ -167,3 +167,7 @@ router.get('/metrics', metricsAuth, (req, res) => {
 });
 
 module.exports = router;
+// Экспортируем для юнит-теста экранирования label-значений (test/unit/metrics-labels.test.js) —
+// не влияет на поведение Express: router остаётся вызываемой функцией-middleware,
+// это просто дополнительное свойство на ней.
+module.exports.labels = labels;

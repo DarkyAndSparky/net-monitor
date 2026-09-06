@@ -330,4 +330,9 @@ async function schedulerTick() {
 setInterval(schedulerTick, TICK_MS);
 schedulerTick();
 
-module.exports = { pingHost, statusCache, snmpCache, portCheckCache, dispatchAlert };
+module.exports = { pingHost, statusCache, snmpCache, portCheckCache, dispatchAlert,
+  // Экспортировано дополнительно для юнит-тестов (test/unit/scheduler.test.js) —
+  // не влияет на поведение планировщика, он всё так же стартует setInterval() выше
+  // при require() этого модуля.
+  evaluateAlert, recordIncidentTransition, schedulerTick, trafficTick, alertState,
+  checkDevicePorts };
