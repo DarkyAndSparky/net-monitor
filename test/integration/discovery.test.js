@@ -87,10 +87,17 @@ describe('NetMonitor Discovery API (сеть, топология, правила
     assert.equal((await res.json()).error, 'range_too_big');
   });
 
-  // Реальный ping-sweep (успешный /30) намеренно НЕ тестируется здесь: pingHost()
-  // требует ICMP-доступа, которого может не быть в песочнице CI/тестовой среды —
-  // тест на реальную сеть завис бы неопределённо долго. Валидация входа (выше)
-  // покрывает весь код роута, не зависящий от сети.
+  test('POST /api/discovery/scan с валидным /30 — реально сканирует (pingHost резолвится быстро без ICMP-прав, ~10-20мс на хост)', async () => {
+    const res = await api('/api/discovery/scan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cidr: '10.255.255.0/30' }) });
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.equal(data.scanned, 2, '/30 даёт 2 адреса хостов (сеть и broadcast исключены)');
+    assert.ok(Array.isArray(data.results));
+    assert.equal(data.found, data.results.length);
+    // found всегда 0 в этой песочнице: ICMP недоступен полностью (даже на loopback,
+    // проверено отдельно) — поле inRegistry на найденных хостах покрыто косвенно через
+    // прямой SQL-запрос known-set в тестах add-bulk выше, где реальный пинг не нужен.
+  });
 
   test('POST /api/discovery/add-bulk без items — 400 items_required', async () => {
     const res = await api('/api/discovery/add-bulk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
